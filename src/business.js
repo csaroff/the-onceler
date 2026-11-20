@@ -53,7 +53,7 @@ export function createBusiness(g) {
     if (pile) scene.remove(pile);
     pileLevel = level;
     pile = level ? works.build({ kind: 'pile', level }) : null;
-    if (pile) { pile.position.set(counter.x, height(counter.x, counter.z), counter.z + 0.9); scene.add(pile); }
+    if (pile) { pile.position.copy(counter); pile.rotation.y = shop.rotation.y; scene.add(pile); } // on the counter top
   }
 
   // --- the town

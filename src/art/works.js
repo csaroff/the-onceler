@@ -373,7 +373,7 @@ function buildCrate(g) {
   });
   g.add(k.mesh());
   // A stencilled label on the front and the side.
-  labelMaterial ||= flat('#ffffff', { map: signTexture(['THNEEDS'], { width: 512, height: 150, background: C.paper }) });
+  labelMaterial ||= flat('#ffffff', { map: signTexture(['THNEEDS'], { width: 800, height: 150, background: C.paper }) });
   [[0, 0.3, 0.305, 0], [0.365, 0.3, 0, Math.PI / 2]].forEach(([x, y, z, ry]) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.13), labelMaterial);
     m.applyMatrix4(k.frame.clone().multiply(at(x, y, z, 0, ry, 0)));
