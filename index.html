@@ -6,51 +6,78 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&display=swap">
 <style>
   /* The display font draws 0 like a small o, which is no good for money. Take the digits from a plainer face. */
-  @font-face { font-family: 'Digits'; src: local('Arial Rounded MT Bold'), local('Arial Black'), local('Arial Bold'); unicode-range: U+30-39, U+24, U+2E; }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: #fff;
+  @font-face { font-family: 'Digits'; src: local('Arial Rounded MT Bold'), local('Arial Black'), local('Arial Bold'); unicode-range: U+30-39, U+24, U+2E, U+2C; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: #fff; user-select: none;
                font-family: 'Digits', 'Mountains of Christmas', Georgia, serif; font-weight: 700; }
   canvas { display: block; }
   .ink { text-shadow: 2px 2px 0 #17110d, -2px 2px 0 #17110d, 2px -2px 0 #17110d, -2px -2px 0 #17110d, 0 3px 6px #000; }
   #crosshair { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #fff; opacity: .7; }
-  #money { position: fixed; top: 6px; left: 0; right: 0; text-align: center; font-size: 62px; color: #ffe36b; transition: transform .12s; }
+  #money { position: fixed; top: 4px; left: 0; right: 0; text-align: center; font-size: 60px; color: #ffe36b; transition: transform .12s; }
   #money.bump { transform: scale(1.18); }
-  #pops { position: fixed; top: 78px; left: 0; right: 0; height: 0; text-align: center; }
+  #pops { position: fixed; top: 74px; left: 0; right: 0; height: 0; text-align: center; }
   .pop { position: absolute; left: 0; right: 0; font-size: 30px; color: #8dff7a; animation: rise 1.3s ease-out forwards; }
   .pop.spend { color: #ff8a7a; }
   @keyframes rise { from { transform: translateY(18px); opacity: 1; } to { transform: translateY(-26px); opacity: 0; } }
-  #hud { position: fixed; left: 18px; top: 14px; font-size: 22px; line-height: 1.35; }
-  #build { position: fixed; left: 18px; bottom: 14px; font-size: 21px; line-height: 1.45; }
-  #build .off { opacity: .5; }
-  #build .sel { color: #ffe36b; }
-  #caption { position: fixed; left: 0; right: 0; bottom: 17%; text-align: center; font-size: 34px;
-             opacity: 0; transition: opacity .8s; padding: 0 10%; z-index: 5; }
-  #caption.lorax { color: #ffb347; font-size: 38px; }
+  #goal { position: fixed; left: 18px; top: 12px; font-size: 26px; color: #ffe36b; max-width: 30%; line-height: 1.15; }
+  #status { position: fixed; left: 18px; top: 84px; font-size: 20px; line-height: 1.35; }
+  #wave { position: fixed; right: 18px; top: 14px; font-size: 24px; color: #ff8a7a; text-align: right; }
+  #tip { position: fixed; top: 150px; left: 20%; right: 20%; text-align: center; font-size: 24px; opacity: 0; transition: opacity .6s; }
+  #hint { position: fixed; left: 0; right: 0; top: 57%; text-align: center; font-size: 26px; color: #ffe36b; }
+  #caption { position: fixed; left: 0; right: 0; bottom: 15%; text-align: center; font-size: 36px; line-height: 1.15;
+             opacity: 0; transition: opacity .6s; padding: 0 12%; z-index: 5; }
+  #caption small { display: block; font-size: 20px; color: #ffb347; margin-top: 4px; }
+  #caption .unless { font-size: 110px; letter-spacing: 12px; color: #d8d0c0; }
+  #menu { position: fixed; right: 18px; bottom: 16px; font-size: 20px; line-height: 1.4; display: none; text-align: right;
+          background: rgba(23, 17, 13, .55); padding: 10px 16px; border-radius: 14px; }
+  #menu h3 { margin: 0 0 4px; font-size: 26px; color: #ffe36b; }
+  #menu .off { opacity: .45; }
+  #menu .sel { color: #ffe36b; }
+  #keys { position: fixed; left: 18px; bottom: 14px; font-size: 17px; opacity: .85; line-height: 1.4; }
+  #health { position: fixed; left: 50%; bottom: 26px; width: 300px; margin-left: -150px; height: 16px; border: 3px solid #17110d;
+            border-radius: 10px; background: rgba(23, 17, 13, .6); opacity: 0; transition: opacity .5s; }
+  #healthFill { height: 100%; width: 100%; background: #6fdc4a; border-radius: 7px; }
+  #boss { position: fixed; left: 25%; right: 25%; top: 84px; display: none; text-align: center; font-size: 24px; }
+  #bossBar { height: 18px; border: 3px solid #17110d; border-radius: 10px; background: rgba(23, 17, 13, .6); margin-top: 2px; }
+  #bossFill { height: 100%; background: #e0483e; border-radius: 7px; }
+  #hurt, #omen { position: fixed; inset: 0; pointer-events: none; opacity: 0; }
+  #hurt { background: radial-gradient(transparent 40%, #c81e1e 100%); transition: opacity .35s; }
+  #omen { background: radial-gradient(transparent 45%, #1a0f0a 100%); }
   .bar { position: fixed; left: 0; right: 0; height: 0; background: #000; transition: height 1.2s; z-index: 4; }
   #barTop { top: 0; } #barBottom { bottom: 0; }
-  body.cutscene .bar { height: 13%; }
-  body.cutscene #hud, body.cutscene #build, body.cutscene #crosshair, body.cutscene #money, body.cutscene #pops { opacity: 0; }
-  body.title #hud, body.title #build, body.title #crosshair, body.title #money { opacity: 0; }
-  #fade { position: fixed; inset: 0; background: #000; opacity: 0; transition: opacity 2s; pointer-events: none; z-index: 3; }
-  #start { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-           background: rgba(10, 30, 10, .2); cursor: pointer; z-index: 10; text-align: center; }
-  #start h1 { font-size: 110px; margin: 0; color: #ffe36b; }
-  #start p { margin: 4px; font-size: 28px; }
+  body.cutscene .bar { height: 12%; }
+  body.cutscene .hud, body.title .hud { opacity: 0; }
+  #fade { position: fixed; inset: 0; background: #000; opacity: 0; transition: opacity 1.6s; pointer-events: none; z-index: 3; }
+  #start, #card { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+           background: rgba(10, 30, 10, .2); z-index: 10; text-align: center; }
+  #start { cursor: pointer; }
+  #card { display: none; background: rgba(15, 10, 8, .72); }
+  #start h1, #card h1 { font-size: 110px; margin: 0; color: #ffe36b; }
+  #start p, #card p { margin: 4px; font-size: 28px; }
 </style>
 </head>
 <body class="title">
-<div id="money" class="ink">$0.00</div>
-<div id="pops" class="ink"></div>
-<div id="hud" class="ink"></div>
-<div id="build" class="ink"></div>
-<div id="crosshair"></div>
+<div id="omen"></div><div id="hurt"></div>
+<div id="money" class="ink hud">$0.00</div>
+<div id="pops" class="ink hud"></div>
+<div id="goal" class="ink hud"></div>
+<div id="status" class="ink hud"></div>
+<div id="wave" class="ink hud"></div>
+<div id="tip" class="ink hud"></div>
+<div id="hint" class="ink hud"></div>
+<div id="boss" class="ink hud"><span id="bossName"></span><div id="bossBar"><div id="bossFill"></div></div></div>
+<div id="menu" class="ink hud"></div>
+<div id="keys" class="ink hud">[B] business · [V] defences · [E] use · click: axe · right-click or [F]: sling</div>
+<div id="health" class="hud"><div id="healthFill"></div></div>
+<div id="crosshair" class="hud"></div>
 <div id="caption" class="ink"></div>
 <div id="barTop" class="bar"></div><div id="barBottom" class="bar"></div>
 <div id="fade"></div>
+<div id="card" class="ink"></div>
 <div id="start" class="ink">
   <h1>The Once-ler</h1>
   <p>It is a beautiful morning. You have an axe.</p>
   <p style="margin-top:26px">Click to begin</p>
-  <p style="font-size:20px">WASD move · Shift run · Space jump · Click chop · 1 2 3 buy · Q cancel</p>
+  <p style="font-size:20px">WASD move · Shift run · Space jump · Click chop · E use · B business · V defences</p>
 </div>
 <script type="module" src="/src/main.js"></script>
 </body>

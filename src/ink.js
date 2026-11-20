@@ -41,7 +41,7 @@ const fragmentShader = /* glsl */ `
                      max(1.0 - dot(n, normalAt(uv - vec2(0.0, o.y))), 1.0 - dot(n, normalAt(uv + vec2(0.0, o.y)))));
     float crease = smoothstep(0.35, 0.7, bend) * (1.0 - smoothstep(60.0, 140.0, distance));
 
-    float ink = max(outline * (1.0 - smoothstep(500.0, 900.0, distance)), crease * 0.85);
+    float ink = max(outline * (1.0 - smoothstep(300.0, 470.0, distance)), crease * 0.85);
 
     vec3 color = texture2D(tColor, vUv).rgb;
     // Paper grain, and the colour draining out as the place is ruined.

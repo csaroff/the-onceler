@@ -6,9 +6,9 @@ import { dirname } from 'node:path';
 
 const args = process.argv.slice(2);
 const take = (flag) => { const i = args.indexOf(flag); return i < 0 ? undefined : args.splice(i, 2)[1]; };
-const opts = take('--opts'), cols = take('--cols'), ruin = take('--ruin');
+const opts = take('--opts'), cols = take('--cols'), ruin = take('--ruin'), outFile = take('--out'), w = take('--w'), h = take('--h');
 const [model, ...views] = args;
-const out = take('--out') || `tools/out/${model}.png`;
+const out = outFile || `tools/out/${model}.png`;
 if (!model) { console.error('usage: node tools/shot.mjs <model> [pose@t/yaw/pitch/zoom ...] [--opts json] [--out file]'); process.exit(1); }
 
 const query = new URLSearchParams({ model });
@@ -16,6 +16,8 @@ if (views.length) query.set('views', views.join(','));
 if (opts) query.set('opts', opts);
 if (cols) query.set('cols', cols);
 if (ruin) query.set('ruin', ruin);
+if (w) query.set('w', w); // cell size in pixels; the game itself is 16:9
+if (h) query.set('h', h);
 
 const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 1500, height: 1300 } });
