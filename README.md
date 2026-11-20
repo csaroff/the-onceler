@@ -23,6 +23,7 @@ with a horn call, for a few seconds. About a minute later the wildlife arrives f
 - After every third wave a lieutenant waits in no-man's-land, north-west of the shop, for you to come alone.
   Beat it and its kind is sent away for good, which you are made to watch, and it is quiet for a while.
 - Defences are walls, hedges and the guns of The Butter Battle Book.
+- A compass strip at the bottom points to the shop, the town and any waiting lieutenant.
 - Being knocked out costs a quarter of your money.
 - The last tree ends it, more or less as the book does.
 

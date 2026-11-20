@@ -212,7 +212,9 @@ export function createWar(g) {
       if (d < 22) {
         e.state = 'dive'; e.timer = 0;
         Object.assign(e.from, { x: e.x, y: e.y, z: e.z });
-        Object.assign(e.aim, { x: at.x, y: height(at.x, at.z) + 1.1, z: at.z });
+        // Pull up just short of the target, not inside it.
+        const gap = def.size + 0.8, dx = at.x - e.x, dz = at.z - e.z, dd = Math.hypot(dx, dz) || 1;
+        Object.assign(e.aim, { x: at.x - (dx / dd) * gap, y: height(at.x, at.z) + Math.max(1.1, def.size * 0.6), z: at.z - (dz / dd) * gap });
       }
     } else if (e.state === 'dive') {
       // It commits to where you were when it started. Step aside.
@@ -221,7 +223,7 @@ export function createWar(g) {
       e.x = e.from.x + (e.aim.x - e.from.x) * ease; e.y = e.from.y + (e.aim.y - e.from.y) * ease; e.z = e.from.z + (e.aim.z - e.from.z) * ease;
       pose(e, 'dive', t);
       if (t >= 1) {
-        if (dist(e.x, e.z, at.x, at.z) < 2 + at.radius) strikeTarget(e.target, def.dmg);
+        if (dist(e.x, e.z, at.x, at.z) < def.size + 2.2 + at.radius) strikeTarget(e.target, def.dmg);
         g.fx.burst(e.x, e.y - 0.8, e.z, '#d8c9a0', 6, 4, 0.4);
         e.state = def.boss ? 'rest' : 'climb'; e.timer = 0;
       }
@@ -261,6 +263,11 @@ export function createWar(g) {
         if (dist(e.x, e.z, g.player.x, g.player.z) < 24) beginDuel(e);
       } else if (e.def.flies) updateFlyer(e, dt);
       else updateGround(e, dt);
+      // Nothing on the ground may stand on top of you.
+      if (e.hp > 0 && !e.def.flies) {
+        const dx = e.x - g.player.x, dz = e.z - g.player.z, d = Math.hypot(dx, dz), min = e.def.size + 0.5;
+        if (d < min && d > 0.001) { e.x = g.player.x + (dx / d) * min; e.z = g.player.z + (dz / d) * min; }
+      }
       e.model.position.set(e.x, e.y, e.z);
       e.model.rotation.y = e.heading;
     }

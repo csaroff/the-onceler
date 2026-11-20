@@ -13,7 +13,7 @@ import { createWar } from './war.js';
 import { createLorax } from './lorax.js';
 import { createDefences, DEFENCES } from './defences.js';
 import { createScenes } from './scenes.js';
-import { height, clamp, SHOP } from './terrain.js';
+import { height, clamp, SHOP, TOWN } from './terrain.js';
 
 const testing = new URLSearchParams(location.search).has('test');
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -117,8 +117,26 @@ function menuHtml() {
   return '';
 }
 
+// The angle from where you are looking to a point: 0 dead ahead, positive to the right.
+function bearing(x, z) {
+  const p = g.player, d = p.facing(), dx = x - p.x, dz = z - p.z;
+  return Math.atan2(dx * -d.z + dz * d.x, dx * d.x + dz * d.z);
+}
+
+function updateCompass() {
+  const p = g.player, far = 1e5, marks = [];
+  for (const [label, x, z] of [['N', 0, -far], ['E', far, 0], ['S', 0, far], ['W', -far, 0]]) {
+    const rel = bearing(p.x + x, p.z + z);
+    if (Math.abs(rel) < 1.3) marks.push({ label, rel });
+  }
+  marks.push({ label: 'shop', rel: bearing(SHOP.x, SHOP.z), cls: 'place' }, { label: 'town', rel: bearing(TOWN.x, TOWN.z), cls: 'place' });
+  if (g.war.challenge) marks.push({ label: 'lieutenant', rel: bearing(g.war.challenge.x, g.war.challenge.z), cls: 'danger' });
+  g.ui.compass(marks);
+}
+
 function updateScreen() {
   const { stock, player, world, war, ui } = g;
+  updateCompass();
   ui.money(stock.money);
   ui.goal(goal());
   const carrying = [player.tufts && `${player.tufts} tufts`, player.thneeds && `${player.thneeds} Thneeds`].filter(Boolean).join(', ');

@@ -33,6 +33,10 @@
   #menu .off { opacity: .45; }
   #menu .sel { color: #ffe36b; }
   #keys { position: fixed; left: 18px; bottom: 14px; font-size: 17px; opacity: .85; line-height: 1.4; }
+  #compass { position: fixed; left: 37%; right: 37%; bottom: 52px; height: 26px; font-size: 18px; border-bottom: 3px solid rgba(255, 255, 255, .7); }
+  #compass span { position: absolute; bottom: 2px; transform: translateX(-50%); white-space: nowrap; opacity: .75; }
+  #compass span.place { color: #ffe36b; opacity: 1; bottom: 24px; }
+  #compass span.danger { color: #ff8a7a; opacity: 1; bottom: 24px; }
   #health { position: fixed; left: 50%; bottom: 26px; width: 300px; margin-left: -150px; height: 16px; border: 3px solid #17110d;
             border-radius: 10px; background: rgba(23, 17, 13, .6); opacity: 0; transition: opacity .5s; }
   #healthFill { height: 100%; width: 100%; background: #6fdc4a; border-radius: 7px; }
@@ -67,6 +71,7 @@
 <div id="boss" class="ink hud"><span id="bossName"></span><div id="bossBar"><div id="bossFill"></div></div></div>
 <div id="menu" class="ink hud"></div>
 <div id="keys" class="ink hud">[B] business · [V] defences · [E] use · click: axe · right-click or [F]: sling</div>
+<div id="compass" class="ink hud"></div>
 <div id="health" class="hud"><div id="healthFill"></div></div>
 <div id="crosshair" class="hud"></div>
 <div id="caption" class="ink"></div>

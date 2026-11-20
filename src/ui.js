@@ -23,6 +23,10 @@ export function createUI() {
       if (name) { show('bossName', name); $('bossFill').style.width = `${Math.max(0, fraction) * 100}%`; }
     },
     wave: (text) => show('wave', text || ''),
+    // Marks along a strip: `rel` is the angle to the thing, 0 dead ahead, positive to the right.
+    compass(marks) {
+      show('compass', marks.map((m) => `<span class="${m.cls || ''}" style="left:${(50 + Math.max(-1, Math.min(1, m.rel / 1.3)) * 50).toFixed(1)}%">${m.label}</span>`).join(''));
+    },
     pop(text, spend = false) {
       const el = document.createElement('div');
       el.className = spend ? 'pop spend' : 'pop';

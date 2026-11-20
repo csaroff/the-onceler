@@ -65,6 +65,11 @@ assert.equal(s.money, 0);
 assert.equal(s.loraxVisible, false, 'there is no Lorax before the first tree falls');
 assert.ok(s.lootsInTrees >= 3, `Bar-ba-loots should be up in the trees, found ${s.lootsInTrees}`);
 assert.ok(s.standing > 500, 'four groves of trees');
+// Facing north from the shop, the town is off to the right (east) on the compass.
+await run('g.player.yaw = 0; g.step(0.05)');
+const townMark = await page.evaluate(() => [...document.querySelectorAll('#compass span')].find((el) => el.textContent === 'town').style.left);
+assert.ok(parseFloat(townMark) > 90, `town should be marked to the right, was at ${townMark}`);
+await run('g.player.yaw = 0.42; g.step(0.05)');
 await shot('02-paradise');
 
 // ---- The first tree. He comes out of the stump, close enough to touch, and says who he is.
