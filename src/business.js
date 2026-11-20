@@ -208,13 +208,16 @@ export function createBusiness(g) {
     return id === 'factory' ? FACTORY_PRICES[owned.factory] : Math.round(item.base * item.growth ** owned[id]);
   };
 
-  function buy(id) {
+  // `free` is for loading a saved game: the thing appears, and nothing is paid or said.
+  function buy(id, free = false) {
     const cost = price(id);
-    if (stock.money < cost) return false;
-    money(-cost);
+    if (cost === Infinity || (!free && stock.money < cost)) return false;
+    if (!free) {
+      money(-cost);
+      g.audio.purchase();
+      g.ui.pop(`−$${cost.toFixed(2)}`, true);
+    }
     owned[id]++;
-    g.audio.purchase();
-    g.ui.pop(`−$${cost.toFixed(2)}`, true);
     if (id === 'cart') { g.player.maxTufts = 12; g.player.maxThneeds = 24; place(works.build({ kind: 'handcart' }), SHOP.x + 5.5, SHOP.z + 5, 0.6); }
     if (id === 'knitter') {
       const i = knitters.length, model = place(works.build({ kind: 'knitter' }), SHOP.x - 6.5 - (i % 3) * 3.6, SHOP.z + 2 + Math.floor(i / 3) * 4.2, 0.3);
@@ -238,7 +241,7 @@ export function createBusiness(g) {
       factoryUnit.radius = 7 + owned.factory * 2;
       g.world.setGlupp(Math.max(0, (owned.factory - 1) / 3));
       g.world.scorch(FACTORY.x, FACTORY.z, 26 + owned.factory * 8);
-      if (!g.story.flag('factory', 'factory')) g.ui.say(owned.factory === 4 ? 'biggest' : 'biggerFactory');
+      if (!g.story.flag('factory', 'factory') && !free) g.ui.say(owned.factory === 4 ? 'biggest' : 'biggerFactory');
     }
     if (id === 'hacker') {
       const model = place(works.build({ kind: 'hacker' }), SHOP.x - 12 - hackers.length * 5, SHOP.z - 12);
@@ -354,14 +357,16 @@ export function createBusiness(g) {
   const brokenNearby = () => units.find((u) => u.broken && dist(u.x, u.z, g.player.x, g.player.z) < u.radius + 3.5);
 
   // --- what [E] does here, and what the screen says about it
-  const nearStool = () => dist(g.player.x, g.player.z, stool.x, stool.z) < 2.6;
-  const nearCounter = () => dist(g.player.x, g.player.z, counter.x, counter.z) < 3;
+  const toStool = () => dist(g.player.x, g.player.z, stool.x, stool.z), toCounter = () => dist(g.player.x, g.player.z, counter.x, counter.z);
+  const canTake = () => toCounter() < 3 && stock.thneeds > 0 && g.player.thneeds < g.player.maxThneeds;
+  // The stool and the counter are close together. Standing between them, the nearer one wins.
+  const canKnit = () => toStool() < 2.6 && stock.tufts > 0 && (!canTake() || toStool() <= toCounter());
 
   function hint() {
     const p = g.player, wreck = brokenNearby();
     if (wreck) return `[E] mend the ${wreck.name} · $${repairCost(wreck)}`;
-    if (nearStool() && stock.tufts > 0) return p.knitting ? 'Knitting…' : 'Hold [E] to knit a Thneed';
-    if (nearCounter() && stock.thneeds > 0 && p.thneeds < p.maxThneeds) return '[E] take Thneeds to sell';
+    if (canKnit()) return p.knitting ? 'Knitting…' : 'Hold [E] to knit a Thneed';
+    if (canTake()) return '[E] take Thneeds to sell';
     if (atStall() && p.thneeds > 0) return 'Hold [E] to sell';
     return '';
   }
@@ -378,7 +383,7 @@ export function createBusiness(g) {
       }
       return;
     }
-    if (held && nearStool() && stock.tufts > 0) {
+    if (held && canKnit()) {
       p.knitting = true;
       const before = p.knit;
       p.knit += dt / KNIT_SECONDS;
@@ -391,7 +396,7 @@ export function createBusiness(g) {
       }
       return;
     }
-    if (pressed && nearCounter() && stock.thneeds > 0 && p.thneeds < p.maxThneeds) {
+    if (pressed && canTake()) {
       const count = Math.min(stock.thneeds, p.maxThneeds - p.thneeds);
       stock.thneeds -= count; p.thneeds += count;
       g.audio.pickup();

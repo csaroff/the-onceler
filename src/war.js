@@ -298,11 +298,12 @@ export function createWar(g) {
     if (war.wave === 4) g.story.flag('business', 'business');
   }
 
-  function issueChallenge() {
+  function issueChallenge(quiet = false) {
     const stage = STAGES[war.stage];
     if (!stage.boss || war.challenge) return;
     war.challenge = spawn(stage.boss, NOMANS.x, NOMANS.z);
     war.challenge.state = 'wait';
+    if (quiet) return;
     g.audio.roar();
     g.ui.tip('Something is standing in no-man’s-land, north-west of the shop. It is waiting for you, alone.', 10);
   }
@@ -372,6 +373,12 @@ export function createWar(g) {
 
   // For the screen: a boss's name and remaining health, if one is fighting.
   war.bossBar = () => (war.duel && war.challenge ? { name: war.challenge.def.boss, fraction: clamp(war.challenge.hp / war.challenge.maxHp, 0, 1) } : null);
+  // For saved games. Whatever was attacking is not saved; a waiting lieutenant is.
+  war.snapshot = () => ({ stage: war.stage, wave: war.wave, wavesThisStage: war.wavesThisStage, enabled: war.enabled, challenge: !!war.challenge });
+  war.restore = (d) => {
+    Object.assign(war, { stage: d.stage, wave: d.wave, wavesThisStage: d.wavesThisStage, enabled: d.enabled, phase: 'calm', calm: 45, threat: 0 });
+    if (d.challenge) issueChallenge(true);
+  };
   war.spawn = spawn;
   return war;
 }

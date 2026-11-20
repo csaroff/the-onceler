@@ -35,13 +35,20 @@ export function createDefences(g) {
     g.stock.money = Math.round((g.stock.money - def.price) * 100) / 100;
     g.ui.pop(`−$${def.price.toFixed(2)}`, true);
     g.audio.purchase();
-    const model = arms.build({ kind: def.id, seed: structures.length + 1 });
-    model.position.set(at.x, height(at.x, at.z), at.z);
-    model.rotation.y = g.player.yaw;
-    g.scene.add(model);
-    structures.push({ def, model, x: at.x, z: at.z, rot: g.player.yaw, radius: def.range ? 1.2 : 2, hp: def.hp, cooldown: 0, fired: 9, broken: false });
+    add(def, at.x, at.z, g.player.yaw);
     return true;
   };
+
+  function add(def, x, z, rot) {
+    const model = arms.build({ kind: def.id, seed: structures.length + 1 });
+    model.position.set(x, height(x, z), z);
+    model.rotation.y = rot;
+    g.scene.add(model);
+    structures.push({ def, model, x, z, rot, radius: def.range ? 1.2 : 2, hp: def.hp, cooldown: 0, fired: 9, broken: false });
+  }
+  // For saved games: what stands where, and putting it back.
+  defences.snapshot = () => structures.map((s) => ({ id: s.def.id, x: s.x, z: s.z, rot: s.rot }));
+  defences.restore = (list) => { for (const s of list) { const def = DEFENCES.find((d) => d.id === s.id); if (def) add(def, s.x, s.z, s.rot); } };
 
   // Is this spot inside a standing wall (or hedge)? Walls run 4 m along their own x axis.
   function inside(x, z, id) {

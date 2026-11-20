@@ -25,6 +25,8 @@ with a horn call, for a few seconds. About a minute later the wildlife arrives f
 - Defences are walls, hedges and the guns of The Butter Battle Book.
 - A compass strip at the bottom points to the shop, the town and any waiting lieutenant.
 - Being knocked out costs a quarter of your money.
+- The game saves itself every ten seconds (in the browser's local storage) and offers to carry on next time;
+  press N on the title screen to start over. Esc lets go of the mouse and pauses.
 - The last tree ends it, more or less as the book does.
 
 Every line of dialogue is from the book and lives in `src/quotes.js`.

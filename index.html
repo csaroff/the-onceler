@@ -51,6 +51,9 @@
   body.cutscene .bar { height: 12%; }
   body.cutscene .hud, body.title .hud { opacity: 0; }
   #fade { position: fixed; inset: 0; background: #000; opacity: 0; transition: opacity 1.6s; pointer-events: none; z-index: 3; }
+  #pause { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; font-size: 70px;
+           color: #ffe36b; background: rgba(15, 10, 8, .55); z-index: 9; pointer-events: none; line-height: 1; }
+  #pause small { display: block; font-size: 26px; color: #fff; margin-top: 12px; }
   #start, #card { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
            background: rgba(10, 30, 10, .2); z-index: 10; text-align: center; }
   #start { cursor: pointer; }
@@ -78,10 +81,11 @@
 <div id="barTop" class="bar"></div><div id="barBottom" class="bar"></div>
 <div id="fade"></div>
 <div id="card" class="ink"></div>
+<div id="pause" class="ink"><div>Paused<small>click to carry on</small></div></div>
 <div id="start" class="ink">
   <h1>The Once-ler</h1>
   <p>It is a beautiful morning. You have an axe.</p>
-  <p style="margin-top:26px">Click to begin</p>
+  <p id="begin" style="margin-top:26px">Click to begin</p>
   <p style="font-size:20px">WASD move · Shift run · Space jump · Click chop · E use · B business · V defences</p>
 </div>
 <script type="module" src="/src/main.js"></script>

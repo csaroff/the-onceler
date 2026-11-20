@@ -242,6 +242,18 @@ export function createWorld(scene, hooks) {
     return true;
   }
 
+  // Remove a tree at once, with no fall and no tufts. Used when a saved game is loaded.
+  function clear(tree) {
+    if (tree.state !== 'standing') return;
+    const v = variants[tree.grove][tree.variant];
+    v.trunk.setMatrixAt(tree.slot, zero);
+    v.tuft.setMatrixAt(tree.slot, zero);
+    v.trunk.instanceMatrix.needsUpdate = v.tuft.instanceMatrix.needsUpdate = true;
+    stumps.set(tree.id, m.compose(p.set(tree.x, tree.y, tree.z), q.setFromAxisAngle(up, tree.rot), s.setScalar(tree.scale)));
+    tree.state = 'gone';
+    scorch(tree.x, tree.z);
+  }
+
   function setRuin(ruin) {
     scene.background.lerpColors(SKY[0], SKY[1], ruin);
     scene.fog.color.copy(scene.background);
@@ -286,5 +298,5 @@ export function createWorld(scene, hooks) {
   }
 
   const standing = () => trees.filter((t) => t.state === 'standing');
-  return { trees, standing, fell, scorch, trunkPoint, perchPoint, setRuin, setGlupp, update };
+  return { trees, standing, fell, clear, scorch, trunkPoint, perchPoint, setRuin, setGlupp, update };
 }

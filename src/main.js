@@ -81,6 +81,53 @@ function comeRound() {
   g.ui.tip(lost > 0 ? `You came round at the shop. ${dollars(lost)} was gone.` : 'You came round at the shop.', 8);
 }
 
+// ---------------------------------------------------------------- saved games
+
+// Everything needed to put the game back as it was. Whatever was attacking at the time is not kept.
+g.snapshot = () => ({
+  version: 1,
+  stock: { ...g.stock }, seen: [...g.story.seen], ruin: g.ruin, ended: g.ended,
+  felledTrees: g.world.trees.filter((t) => t.state !== 'standing').map((t) => t.id),
+  player: { x: g.player.x, z: g.player.z, yaw: g.player.yaw, tufts: g.player.tufts, thneeds: g.player.thneeds, hasSeed: g.player.hasSeed },
+  owned: { ...g.business.owned }, defences: g.defences.snapshot(), war: g.war.snapshot(), gone: { ...g.wildlife.gone },
+});
+
+// Apply a snapshot to a freshly started game.
+g.restore = (d) => {
+  for (const name of d.seen) g.story.seen.add(name); // first, so nothing below is announced a second time
+  Object.assign(g.stock, d.stock);
+  for (const id of d.felledTrees) g.world.clear(g.world.trees[id]);
+  g.story.felled = d.felledTrees.length;
+  g.ruin = d.ruin;
+  g.ended = d.ended;
+  for (const [id, count] of Object.entries(d.owned)) for (let i = 0; i < count; i++) g.business.buy(id, true);
+  g.defences.restore(d.defences);
+  for (const kind of ['loot', 'swan', 'fish']) if (d.gone[kind]) g.wildlife.sendOff(kind);
+  g.war.restore(d.war);
+  Object.assign(g.player, d.player);
+  // Saved while the very last tree was still falling: the ending has not played yet.
+  if (g.world.standing().length === 0 && g.story.flag('lastTree')) g.scenes.play('lift');
+};
+
+const SAVE_KEY = 'the-onceler-save';
+let hasSave = false, lastSave = 0;
+function save() {
+  if (testing || !g.started || g.scenes.active || g.scenes.queue.length) return; // never in the middle of a cutscene
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(g.snapshot())); } catch { /* storage full or switched off: play on without saving */ }
+}
+if (!testing) {
+  try {
+    const saved = localStorage.getItem(SAVE_KEY);
+    if (saved) { g.restore(JSON.parse(saved)); hasSave = true; }
+  } catch (error) {
+    console.warn('Saved game could not be loaded; starting again.', error);
+    localStorage.removeItem(SAVE_KEY);
+    location.reload();
+  }
+  if (hasSave) document.getElementById('begin').innerHTML = 'Click to carry on<br><span style="font-size:20px">or press N to start over</span>';
+  addEventListener('pagehide', save);
+}
+
 // ---------------------------------------------------------------- what the screen says
 
 function goal() {
@@ -159,6 +206,7 @@ const playing = () => g.started && !g.scenes.active;
 addEventListener('keydown', (e) => {
   if (!keys[e.code]) pressed.add(e.code);
   keys[e.code] = true;
+  if (e.code === 'KeyN' && !g.started && hasSave) { localStorage.removeItem(SAVE_KEY); hasSave = false; location.reload(); }
   if (!playing()) return;
   if (e.code === 'KeyB') { menu = menu === 'business' ? null : 'business'; g.defences.select(null); }
   if (e.code === 'KeyV') { menu = menu === 'defences' ? null : 'defences'; g.defences.select(null); }
@@ -228,6 +276,7 @@ function updateSeed(dt) {
     endTimer -= dt;
     if (endTimer <= 0) {
       g.ui.card(`<h1>The End</h1><p>${g.story.felled} Truffula Trees. ${g.stock.sold.toLocaleString()} Thneeds. ${dollars(g.stock.money)}.</p><p>One sapling.</p><p style="font-size:20px;margin-top:20px">Click to stay a while</p>`);
+      everLocked = false; // the end card lets the mouse go on purpose; that is not a pause
       document.exitPointerLock?.();
     }
   }
@@ -271,9 +320,21 @@ g.step = (dt) => {
 };
 g.render = () => g.ink.render(scene, camera, g.time, g.ruin);
 
+// Letting go of the mouse (Esc, or switching window) stops the clock. Without this the valley would maul you while you answered the door.
+let everLocked = false;
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement === renderer.domElement) everLocked = true; });
+g.paused = () => g.started && everLocked && document.pointerLockElement !== renderer.domElement;
+
 if (!testing) {
-  const clock = new THREE.Clock();
-  renderer.setAnimationLoop(() => { g.step(Math.min(0.05, clock.getDelta())); g.render(); });
+  const clock = new THREE.Clock(), pauseEl = document.getElementById('pause');
+  renderer.setAnimationLoop(() => {
+    const dt = Math.min(0.05, clock.getDelta()), paused = g.paused();
+    pauseEl.style.display = paused ? 'flex' : 'none';
+    if (!paused) g.step(dt);
+    g.render();
+    // Save every ten seconds by the wall clock, however fast or slow the game is running.
+    if (performance.now() - lastSave > 10000) { lastSave = performance.now(); save(); }
+  });
 }
 // For poking at the game from the console, and for the scenario tests.
 g.keys = keys;
