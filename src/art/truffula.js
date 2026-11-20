@@ -83,119 +83,200 @@ function stripedTube(curve, length, radiusAt, { stripe = 0.42, sides = 7, seed =
 
 // Six trunk shapes. Each is a list of sideways wanders [x, z] at evenly spaced heights, base to tip, in metres.
 const SHAPES = [
-  { height: 9.4, wander: [[0, 0], [0.15, 0], [0.55, 0.1], [0.9, 0.2], [0.85, 0.1], [0.45, 0], [0.25, -0.05]] }, // a gentle S
-  { height: 7.2, wander: [[0, 0], [-0.1, 0.05], [-0.45, 0.1], [-0.95, 0.15], [-1.35, 0.2], [-1.5, 0.25]] }, // a short bow
-  { height: 11.6, wander: [[0, 0], [0.2, 0.05], [0.7, -0.1], [0.75, -0.2], [0.2, -0.1], [-0.4, 0], [-0.6, 0.1], [-0.4, 0.15]] }, // double S
-  { height: 8.3, wander: [[0, 0], [0.1, 0.1], [0.2, 0.45], [0.15, 0.95], [-0.15, 1.3], [-0.5, 1.35], [-0.6, 1.2]] }, // lean, top nods back
-  { height: 13, wander: [[0, 0], [-0.15, 0], [-0.25, -0.2], [0.1, -0.5], [0.6, -0.6], [0.9, -0.4], [0.8, 0], [0.4, 0.2], [0.2, 0.2]] }, // tall wobbler
-  { height: 10.5, wander: [[0, 0], [0.3, 0.1], [1.0, 0.2], [1.4, 0.35], [1.35, 0.4], [0.95, 0.45], [0.7, 0.45]] }, // big bow and recover
+  { height: 9.4, tuft: 'mop', wander: [[0, 0], [0.15, 0], [0.55, 0.1], [0.9, 0.2], [0.85, 0.1], [0.45, 0], [0.25, -0.05]] }, // a gentle S
+  { height: 7.2, tuft: 'flame', wander: [[0, 0], [-0.1, 0.05], [-0.45, 0.1], [-0.95, 0.15], [-1.35, 0.2], [-1.5, 0.25]] }, // a short bow
+  { height: 11.6, tuft: 'fountain', wander: [[0, 0], [0.2, 0.05], [0.7, -0.1], [0.75, -0.2], [0.2, -0.1], [-0.4, 0], [-0.6, 0.1], [-0.4, 0.15]] }, // double S
+  { height: 8.3, tuft: 'mop', wander: [[0, 0], [0.1, 0.1], [0.2, 0.45], [0.15, 0.95], [-0.15, 1.3], [-0.5, 1.35], [-0.6, 1.2]] }, // lean, top nods back
+  { height: 13, tuft: 'flame', wander: [[0, 0], [-0.15, 0], [-0.25, -0.2], [0.1, -0.5], [0.6, -0.6], [0.9, -0.4], [0.8, 0], [0.4, 0.2], [0.2, 0.2]] }, // tall wobbler
+  { height: 10.5, tuft: 'fountain', wander: [[0, 0], [0.3, 0.1], [1.0, 0.2], [1.4, 0.35], [1.35, 0.4], [0.95, 0.45], [0.7, 0.45]] }, // big bow and recover
 ];
 
 // ---------------------------------------------------------------- tuft
 
-// One lock of the tuft: a fat, flattened strand that grows out of the crown, rises, flops over the shoulder, hangs,
-// and flicks its tip out into a curl. The cross-section is a flattened pentagon: a soft
-// rounded back with a ridge down the middle that the pen picks up as a stroke of hair. `out` is the curl direction: +1 flicks outward, -1 tucks under.
-function lock({ angle, swirl, root = 0.2, lift = 1, reach, drop, curl = 0.35, out = 1, width, segments = 14, sides = 5 }) {
-  const c = curl;
-  const path = [
-    [root, lift], [root + 0.45 * (reach - root), lift + 0.3], [reach * 0.95, lift - 0.05], [reach * 1.05, lift - 0.55 * (lift + drop)],
-    [reach, -drop], [reach + out * c * 0.8, -drop - c * 0.75], [reach + out * c * 1.6, -drop - c * 0.15],
-    [reach + out * c * 1.25, -drop + c * 0.55], [reach + out * c * 0.75, -drop + c * 0.3],
-  ];
-  const profile = new THREE.CatmullRomCurve3(path.map(([x, y]) => new THREE.Vector3(x, y, 0)), false, 'centripetal');
-  const point = (t, o) => {
-    profile.getPoint(t, o);
-    const a = angle + swirl * Math.min(1, t * 1.4); // the lock spirals round the crown as it falls
-    return o.set(Math.cos(a) * o.x, o.y, Math.sin(a) * o.x);
-  };
-  const pos = [], col = [], index = [];
-  const P = v3(), Q = v3(), T = v3(), N = v3(), B = v3();
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    point(t, P);
-    point(Math.min(1, t + 0.01), Q);
-    point(Math.max(0, t - 0.01), T);
-    T.subVectors(Q, T).normalize();
-    const a = angle + swirl * Math.min(1, t * 1.4);
-    B.set(-Math.sin(a), 0, Math.cos(a)); // sideways round the crown
-    N.crossVectors(B, T).normalize(); // off the surface of the tuft
-    B.crossVectors(T, N).normalize();
-    // Narrow at the root, fat in the belly of the lock, tapering to a fine curl.
-    const w = width * (0.5 + 0.6 * Math.sin(Math.PI * Math.min(1, t * 1.5 + 0.1))) * (1 - 0.55 * t ** 2) + 0.03;
-    const h = w * 0.5;
-    // Darker at the roots and on the underside, bright on the hanging belly.
-    const shade = 0.7 + 0.3 * THREE.MathUtils.smoothstep(t, 0.05, 0.4);
+// One lock of the tuft: a long, smooth, flattened ribbon of hair.
+// - `path` is its line in a flat side view, as [out, up] pairs from the crown. `angle` is which way round the crown
+//   it points, and `swirl` twists it further round as it goes, so the locks spiral like combed hair.
+// - At the end it rolls up into a curl that tightens as it goes (`curl` is the starting radius, `roll` the number of
+//   turns). `tilt` turns the plane of the curl: 0 rolls it outward/inward (seen in silhouette), PI/2 rolls it sideways
+//   (seen face-on as a spiral). `turn` = +1 rolls outward or one way round, -1 the other.
+// - The cross-section is a smooth ellipse with exact normals, carried along without twisting, so the toon light
+//   sweeps softly across each lock and the pen only draws its outline.
+function lock({ path, angle, swirl = 0, width, thick = 0.3, curl = 0.3, turn = 1, roll = 1.3, tilt = 0,
+  body = 7, rings = 13, sides = 5, dark = 0.7, bury = 0.25 }) {
+  // 1. The body as a smooth 3D line.
+  // Start a little inside the scalp, so the root is buried rather than pasted on.
+  const [x0, y0] = path[0], [x1, y1] = path[1], len0 = Math.hypot(x1 - x0, y1 - y0) || 1;
+  const rooted = [[x0 - ((x1 - x0) / len0) * bury, y0 - ((y1 - y0) / len0) * bury], ...path];
+  const flat = new THREE.CatmullRomCurve3(rooted.map(([x, y]) => new THREE.Vector3(x, y, 0)), false, 'centripetal');
+  const pts = flat.getSpacedPoints(body).map((p, i) => {
+    const a = angle + swirl * (i / body);
+    return new THREE.Vector3(Math.cos(a) * p.x, p.y, Math.sin(a) * p.x);
+  });
+  const nBody = pts.length;
+  // 2. The curl: steer the heading round inside the curl plane, tightening.
+  const T = pts[nBody - 1].clone().sub(pts[nBody - 2]).normalize();
+  const end = pts[nBody - 1];
+  const outward = new THREE.Vector3(end.x, 0, end.z).normalize();
+  const N = outward.clone().addScaledVector(T, -outward.dot(T)).normalize(); // off the tuft, square to the lock
+  const U = N.clone().applyAxisAngle(T, tilt).multiplyScalar(turn); // the way the curl bends
+  const turns = Math.PI * 2 * roll, step = (curl * 0.75 * turns) / rings;
+  let heading = 0;
+  const P = end.clone();
+  for (let i = 1; i <= rings; i++) {
+    const r = curl * (1 - 0.6 * (i / rings));
+    heading += step / r;
+    P.addScaledVector(T, Math.cos(heading) * step).addScaledVector(U, Math.sin(heading) * step);
+    pts.push(P.clone());
+  }
+  // 3. Sweep the ellipse along the line, carrying the frame along without twisting it.
+  const count = pts.length, pos = [], nor = [], col = [], index = [];
+  const tan = v3(), frameN = v3(), frameB = v3(), n = v3(), prev = v3(), q = new THREE.Quaternion();
+  for (let i = 0; i < count; i++) {
+    tan.subVectors(pts[Math.min(count - 1, i + 1)], pts[Math.max(0, i - 1)]).normalize();
+    if (i === 0) {
+      const a = angle;
+      frameB.set(-Math.sin(a), 0, Math.cos(a));
+      frameN.crossVectors(frameB, tan).normalize();
+    } else {
+      q.setFromUnitVectors(prev, tan);
+      frameN.applyQuaternion(q);
+    }
+    prev.copy(tan);
+    frameB.crossVectors(tan, frameN).normalize();
+    frameN.crossVectors(frameB, tan).normalize();
+    const t = i / (count - 1), tb = i / (nBody - 1);
+    // Like a brush stroke: narrow where it grows from the crown, fullest over the shoulder, then tapering away so
+    // the curl at the end is a thin rolled tip, not a lump.
+    const shoulder = Math.sin(Math.PI * Math.min(1, 0.15 + tb * 0.95)) ** 0.7;
+    const fade = i < nBody ? 0.4 + 0.6 * shoulder * (1 - 0.45 * tb * tb) : 0.42 * (1 - 0.75 * (i - nBody + 1) / rings);
+    const w = width * fade + 0.012, h = w * thick + 0.008;
+    // Darker at the root (the hollows), full bright along the sweep and the curl.
+    const k0 = dark + (1 - dark) * THREE.MathUtils.smoothstep(tb, 0.05, 0.45);
+    const p = pts[i];
     for (let s = 0; s < sides; s++) {
-      const ca = Math.cos((s / sides) * Math.PI * 2), sa = Math.sin((s / sides) * Math.PI * 2);
-      pos.push(P.x + N.x * ca * h + B.x * sa * w, P.y + N.y * ca * h + B.y * sa * w, P.z + N.z * ca * h + B.z * sa * w);
-      const k = Math.min(1, shade + 0.06 * ca);
+      const qa = (s / sides) * Math.PI * 2, cq = Math.cos(qa), sq = Math.sin(qa);
+      pos.push(p.x + frameN.x * cq * h + frameB.x * sq * w, p.y + frameN.y * cq * h + frameB.y * sq * w, p.z + frameN.z * cq * h + frameB.z * sq * w);
+      n.copy(frameN).multiplyScalar(cq / h).addScaledVector(frameB, sq / w).normalize(); // the exact ellipse normal
+      nor.push(n.x, n.y, n.z);
+      const k = Math.min(1, k0 - 0.08 * Math.max(0, -n.y));
       col.push(k, k, k);
     }
   }
-  point(1, P);
-  const tip = pos.length / 3;
-  pos.push(P.x, P.y, P.z);
+  const tip = pos.length / 3, last = pts[count - 1];
+  pos.push(last.x + tan.x * 0.015, last.y + tan.y * 0.015, last.z + tan.z * 0.015);
+  nor.push(tan.x, tan.y, tan.z);
   col.push(1, 1, 1);
-  for (let i = 0; i < segments; i++) {
+  for (let i = 0; i < count - 1; i++) {
     for (let s = 0; s < sides; s++) {
-      const a = i * sides + s, b = i * sides + ((s + 1) % sides), cc = a + sides, d = b + sides;
-      index.push(a, cc, b, b, cc, d);
+      const p0 = i * sides + s, p1 = i * sides + ((s + 1) % sides), p2 = p0 + sides, p3 = p1 + sides;
+      index.push(p0, p2, p1, p1, p2, p3);
     }
   }
-  for (let s = 0; s < sides; s++) index.push(segments * sides + s, tip, segments * sides + ((s + 1) % sides));
+  for (let s = 0; s < sides; s++) index.push((count - 1) * sides + s, tip, (count - 1) * sides + ((s + 1) % sides));
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setIndex(index);
-  geo.computeVertexNormals();
   return geo;
 }
 
-// The whole tuft: a soft core under three layers of fat, overlapping locks. Each layer roots higher on the crown
-// and hangs less far, like the tiers of a mop, so the outline is a lumpy dome with a ragged, flicked-out hem.
-function tuftGeometry(seed, size = 1) {
-  const rand = seeded(seed + 101);
-  const spin = rand() < 0.5 ? 1 : -1;
-  const pieces = [];
-  // The soft core everything grows from, shaded darker underneath.
-  const core = new THREE.SphereGeometry(1, 7, 5).scale(1.25, 0.75, 1.25).translate(0, 0.3, 0);
-  paint(core, (c, x, y) => { const k = 0.6 + 0.3 * THREE.MathUtils.smoothstep(y, -0.5, 0.9); c.setRGB(k, k, k); });
-  pieces.push(core);
-  // Three tiers of locks. Each roots higher on the crown and hangs less far, like the tiers of a mop, and every lock
-  // spirals the same way round, so the whole tuft swirls up to a twist on top like a troll doll's hair.
-  const layers = [
-    { n: 8, root: [0.4, 0.55], lift: [0.55, 0.7], reach: [1.4, 1.55], drop: [0.3, 0.55], curl: [0.34, 0.4], width: [0.52, 0.58], swirl: [0.8, 1.0], seg: 9 },
-    { n: 6, root: [0.2, 0.35], lift: [1.0, 1.1], reach: [1.2, 1.35], drop: [-0.15, 0.1], curl: [0.3, 0.35], width: [0.48, 0.52], swirl: [0.9, 1.1], seg: 8 },
-    { n: 4, root: [0.0, 0.05], lift: [1.35, 1.45], reach: [0.8, 0.9], drop: [-0.75, -0.55], curl: [0.24, 0.28], width: [0.38, 0.42], swirl: [1.1, 1.3], seg: 6 },
-  ];
-  layers.forEach((L, j) => {
-    for (let i = 0; i < L.n; i++) {
-      pieces.push(lock({
-        angle: ((i + j * 0.37) / L.n) * Math.PI * 2 + rand(-0.15, 0.15), swirl: spin * rand(...L.swirl),
-        root: rand(...L.root), lift: rand(...L.lift), reach: rand(...L.reach), drop: rand(...L.drop),
-        curl: rand(...L.curl), out: j === 0 && rand() < 0.25 ? -1 : 1, width: rand(...L.width), segments: L.seg,
-      }));
-    }
-  });
-  // Underneath: short locks hanging from the core and tucking inward, so from below you see hair, not a bald disc.
-  for (let i = 0; i < 3; i++) {
-    pieces.push(lock({
-      angle: (i / 3) * Math.PI * 2 + rand(0, 1), swirl: spin * 0.6, root: 0.35, lift: -0.15,
-      reach: rand(0.6, 0.75), drop: rand(0.65, 0.85), curl: 0.25, out: -1, width: 0.4, segments: 4,
+// The whorl underneath: short wide locks that start at the trunk tip and spiral out along the underside of the
+// scalp to its rim, so from below you look up into a swirl of hair (like the crown of a head), not a bald hole.
+function whorl(rand, spin, n, [rx, ry, cy], width) {
+  const under = (r) => [r, cy - ry * Math.sqrt(Math.max(0, 1 - (r / rx) ** 2)) - 0.06];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push(lock({
+      path: [under(0.02), under(rx * 0.45), under(rx * 0.8), under(rx * 0.97)],
+      angle: (i / n) * Math.PI * 2 + rand(-0.1, 0.1), swirl: spin * 1.4, width, thick: 0.22, curl: 0.16, turn: -1,
+      roll: 0.7, body: 6, rings: 5, dark: 0.62,
     }));
   }
-  // The twist on top: one lock that rises off the crown and flops over in a curl, like the tip of a soft-serve.
-  pieces.push(lock({ angle: rand(0, 6.28), swirl: spin * 1.2, root: 0, lift: 1.4, reach: 0.4, drop: -1.85, curl: 0.32, out: 1, width: 0.34, segments: 6 }));
-  const geo = merge(pieces);
-  // Soften the shading: bend every normal most of the way toward "out from the middle of the tuft", so the light falls
-  // on the whole mop as one soft mass. The locks are still told apart by the pen line where one overlaps another.
-  const p = geo.attributes.position, n = geo.attributes.normal, d = v3(), m = v3();
-  for (let i = 0; i < p.count; i++) {
-    d.set(p.getX(i), (p.getY(i) - 0.35) * 1.4, p.getZ(i)).normalize();
-    m.set(n.getX(i), n.getY(i), n.getZ(i)).multiplyScalar(0.4).addScaledVector(d, 0.6).normalize();
-    n.setXYZ(i, m.x, m.y, m.z);
-  }
+  return out;
+}
+
+// The soft scalp everything grows from: a smooth squashed ball, darker underneath.
+function scalp([rx, ry, y]) {
+  const core = new THREE.SphereGeometry(1, 12, 8).scale(rx, ry, rx).translate(0, y, 0);
+  paint(core, (c, x, yy) => { const k = 0.62 + 0.3 * THREE.MathUtils.smoothstep(yy, y - ry, y + ry * 0.6); c.setRGB(k, k, k); });
+  return core;
+}
+
+// Three tuft styles. Every one is a crown of long locks around a soft scalp, all swirling the same way round.
+// Most hanging locks curl in silhouette; about a third roll sideways so that, from any side, some curls are seen
+// face-on as spirals.
+const curlTilt = (rand) => (rand() < 0.35 ? Math.PI / 2 * (rand() < 0.5 ? 1 : -1) : rand(-0.3, 0.3));
+
+const TUFT_STYLES = {
+  // The mop: flat locks combed down over a round dome, overlapping like shingles, flicking out into curls at the hem.
+  mop(rand, spin) {
+    const head = [1.1, 0.8, 0.35], pieces = [scalp(head), ...whorl(rand, spin, 5, head, 0.7)];
+    const tiers = [
+      { n: 9, root: 0.2, top: 1.15, reach: 1.28, hang: -0.55, width: 0.58, curl: 0.3, swirl: 0.6 },
+      { n: 5, root: 0.05, top: 1.3, reach: 1.2, hang: 0.05, width: 0.56, curl: 0.26, swirl: 0.7 },
+    ];
+    tiers.forEach((L, j) => {
+      for (let i = 0; i < L.n; i++) {
+        const reach = L.reach * rand(0.94, 1.06), hang = L.hang + rand(-0.15, 0.15);
+        pieces.push(lock({
+          path: [[L.root, L.top - 0.12], [reach * 0.6, L.top - 0.04], [reach * 0.98, L.top * 0.6], [reach * 1.03, (L.top * 0.6 + hang) * 0.5], [reach * 0.97, hang]],
+          angle: ((i + j * 0.5) / L.n) * Math.PI * 2 + rand(-0.1, 0.1), swirl: spin * L.swirl * rand(0.85, 1.15),
+          width: L.width * rand(0.9, 1.1), curl: L.curl * rand(0.9, 1.15), turn: 1, tilt: curlTilt(rand), roll: rand(1.0, 1.3),
+        }));
+      }
+    });
+    // The twist on top, like the tip of a soft-serve.
+    pieces.push(lock({ path: [[0, 1.1], [0.04, 1.35], [0.1, 1.55]], angle: rand(0, 6.28), width: 0.24, curl: 0.18, turn: -1, roll: 1.1, body: 5, rings: 6 }));
+    return pieces;
+  },
+  // The flame: like a troll doll's hair, locks sweep up round a tall dome and spiral together into a twisted curl
+  // on top; a skirt of locks rolls outward at the bottom.
+  flame(rand, spin) {
+    const head = [1.0, 1.05, 0.55], pieces = [scalp(head), ...whorl(rand, spin, 5, head, 0.7)];
+    const n = 9;
+    for (let i = 0; i < n; i++) {
+      pieces.push(lock({
+        path: [[0.95, 0.15], [1.08, 0.6], [0.98, 1.2], [0.6, 1.75], [0.2, 2.05]],
+        angle: (i / n) * Math.PI * 2 + rand(-0.08, 0.08), swirl: spin * rand(1.0, 1.2),
+        width: rand(0.52, 0.58), curl: rand(0.2, 0.26), turn: -1, tilt: rand(-0.3, 0.3), roll: rand(0.9, 1.15),
+      }));
+    }
+    for (let i = 0; i < 6; i++) {
+      pieces.push(lock({
+        path: [[0.7, 0.2], [1.1, 0.05], [1.4, -0.3], [1.5, -0.75]],
+        angle: ((i + 0.5) / 6) * Math.PI * 2 + rand(-0.12, 0.12), swirl: spin * 0.3,
+        width: rand(0.46, 0.5), curl: rand(0.26, 0.32), turn: 1, tilt: curlTilt(rand), roll: rand(1.0, 1.3),
+      }));
+    }
+    return pieces;
+  },
+  // The fountain: locks spring up out of a high crown, arch over and fall long, curling at the ends; a wide, droopy
+  // umbrella like a silk tassel.
+  fountain(rand, spin) {
+    const head = [1.0, 0.65, 0.75], pieces = [scalp(head), ...whorl(rand, spin, 5, head, 0.7)];
+    const tiers = [
+      { n: 10, root: 0.15, top: 1.4, reach: 1.6, hang: -0.8, width: 0.56, curl: 0.3, swirl: 0.4 },
+      { n: 5, root: 0.0, top: 1.5, reach: 1.3, hang: 0.15, width: 0.5, curl: 0.25, swirl: 0.5 },
+    ];
+    tiers.forEach((L, j) => {
+      for (let i = 0; i < L.n; i++) {
+        const reach = L.reach * rand(0.92, 1.06), hang = L.hang + rand(-0.2, 0.15);
+        pieces.push(lock({
+          path: [[L.root, L.top - 0.1], [reach * 0.55, L.top + 0.05], [reach * 0.95, L.top * 0.75], [reach * 1.05, (L.top * 0.75 + hang) * 0.5], [reach, hang]],
+          angle: ((i + j * 0.5) / L.n) * Math.PI * 2 + rand(-0.1, 0.1), swirl: spin * L.swirl * rand(0.8, 1.2),
+          width: L.width * rand(0.9, 1.1), curl: L.curl * rand(0.9, 1.15), turn: -1, tilt: curlTilt(rand), roll: rand(1.0, 1.3),
+        }));
+      }
+    });
+    return pieces;
+  },
+};
+
+function tuftGeometry(seed, size = 1, style = 'mop') {
+  const rand = seeded(seed + 101);
+  const spin = rand() < 0.5 ? 1 : -1;
+  const geo = merge(TUFT_STYLES[style](rand, spin));
   geo.scale(size, size, size);
   return geo;
 }
@@ -213,7 +294,7 @@ export function parts(variant = 0) {
   const radiusAt = (u) => tipR + (base - tipR) * (1 - u) + 0.12 * Math.max(0, 1 - u * height / 0.6) ** 2;
   const trunk = stripedTube(spine, height, radiusAt, { seed: variant + 7 });
   trunk.computeBoundingSphere();
-  const tuft = tuftGeometry(variant, 1.0 + height * 0.04);
+  const tuft = tuftGeometry(variant, 1.0 + height * 0.04, shape.tuft);
   tuft.computeBoundingSphere();
   const top = spine.getPoint(1, v3());
   return (cache[variant] = {

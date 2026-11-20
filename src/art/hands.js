@@ -115,17 +115,15 @@ function fistGeometry() {
   return g;
 }
 
-// Open glove: flat palm facing -x (right hand), three fingers pointing -z with a soft curl, thumb up.
+// Open glove, drawn as a fat Seuss mitten: a puffy palm, three short fat fingers squeezed together so they read
+// as one rounded paddle with two little notches, and a stubby thumb. Palm faces -x (right hand), fingers point -z.
 function openGeometry() {
   const parts = [];
-  // A puffy palm.
-  parts.push(ballAt(1, 0, 0, -0.005, 0.03, 0.062, 0.066));
-  // Three fat sausage fingers side by side, gently curled toward the palm side (-x), the outer ones splayed a touch.
-  [[0.042, 0.035, 0.12], [0.0, 0.0, 0.135], [-0.042, -0.03, 0.115]].forEach(([y, splay, len]) => {
-    parts.push(...sausage([[0, y * 0.85, -0.04], [-0.006, y + splay * 0.4, -0.04 - len * 0.55], [-0.026, y + splay, -0.04 - len]], 0.025, 0.023, 7, 8));
+  parts.push(ballAt(1, 0, 0, -0.01, 0.036, 0.07, 0.072));
+  [[0.04, 0.012, 0.085], [0.0, 0.0, 0.1], [-0.04, -0.01, 0.08]].forEach(([y, splay, len]) => {
+    parts.push(...sausage([[-0.002, y * 0.9, -0.04], [-0.01, y + splay * 0.5, -0.04 - len * 0.6], [-0.026, y + splay, -0.04 - len]], 0.031, 0.029, 6, 8));
   });
-  // Thumb, sticking out and up.
-  parts.push(...sausage([[-0.012, 0.045, 0.0], [-0.03, 0.078, -0.03], [-0.045, 0.092, -0.062]], 0.025, 0.022, 6, 8));
+  parts.push(...sausage([[-0.014, 0.05, 0.0], [-0.032, 0.08, -0.025], [-0.042, 0.09, -0.05]], 0.03, 0.027, 5, 8));
   parts.push(cuff(0, 0.045));
   const g = merge(parts);
   g.userData.wrist = V(0, 0, 0.03);
@@ -298,6 +296,28 @@ function thneedParts() {
   THNEED = { body, hem, sleeves, cuffs, ends, neck, neckRib, knit, ribs };
   return THNEED;
 }
+// Knitting in progress. Frame: the needle the work hangs from runs along x at y = 0; the fabric hangs down -y.
+// `panel` is 1 m long and gets scaled in y by how finished it is; `loops` are the stitches strung along the needle.
+let WORK = null;
+function workParts() {
+  if (WORK) return WORK;
+  const panel = new THREE.BoxGeometry(0.32, 1, 0.035, 8, 10, 1).translate(0, -0.5, 0);
+  const p = panel.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    // Gathered narrower on the needle, flaring out below, and rippling like loose wool.
+    const flare = 0.8 + 0.3 * Math.min(1, -y * 2.5);
+    p.setXYZ(i, x * flare + 0.012 * Math.sin(y * 19), y, z + 0.016 * Math.sin(x * 30) * Math.cos(y * 13) + 0.03 * y * y);
+  }
+  panel.computeVertexNormals();
+  // Fat loops of yarn sitting on the needle: the thing that says "knitting" at a glance.
+  const loops = merge(Array.from({ length: 9 }, (_, i) => new THREE.TorusGeometry(0.019, 0.009, 5, 8)
+    .rotateY(Math.PI / 2).translate(-0.13 + i * 0.0325, -0.004, 0)));
+  // A loose strand of yarn running from the work down out of the picture, to the ball he is knitting from.
+  const yarn = pipe([[0.14, -0.01, 0.01], [0.17, -0.05, 0.03], [0.15, -0.14, 0.05], [0.18, -0.3, 0.08], [0.16, -0.5, 0.1]], 0.008, 16, 5);
+  return (WORK = { panel, loops, yarn, hem: new THREE.TorusGeometry(0.17, 0.022, 5, 14).rotateX(Math.PI / 2).scale(1, 1, 0.3) });
+}
+
 // A whole Thneed as one group of two meshes (knitted part and darker ribbing).
 function thneedMesh(withNeck = true) {
   const t = thneedParts(), m = materials(), g = new THREE.Group();
@@ -442,8 +462,11 @@ export function build({ amount } = {}) {
   const needleGeo = merge([pipe([[0, 0, 0], [0, 0.2, 0], [0, 0.4, 0]], (u) => mix(0.009, 0.004, u * u), 6, 6), ballAt(0.022, 0, -0.005, 0)]);
   const needleR = new THREE.Mesh(needleGeo, m.needle), needleL = new THREE.Mesh(needleGeo, m.needle);
   const T = thneedParts();
+  const W = workParts();
   const knitting = new THREE.Group();
-  knitting.add(new THREE.Mesh(T.body, m.thneed), new THREE.Mesh(T.hem, m.rib));
+  const knitPanel = new THREE.Mesh(W.panel, m.thneed), knitHem = new THREE.Mesh(W.hem, m.rib);
+  knitting.add(knitPanel, knitHem, new THREE.Mesh(W.loops, m.rib), new THREE.Mesh(W.yarn, m.thneed));
+  // The odd sleeves sprout from the sides of the work as it nears the end.
   const knitSleeves = T.sleeves.map((g, i) => { const s = new THREE.Group(); s.add(new THREE.Mesh(merge([g.clone(), T.ends[i].clone()]), m.thneed), new THREE.Mesh(T.cuffs[i], m.rib)); knitting.add(s); return s; });
 
   // Armful of Truffula tufts.
@@ -488,7 +511,7 @@ export function build({ amount } = {}) {
   });
 
   rig.add(axe, needleR, needleL, knitting, tufts, stack, offered, jigger);
-  model.userData = { amountOverride: amount, rig, right, left, axe, needleR, needleL, knitting, knitSleeves, tufts, tuftMeshes, stack, layers, offered, jigger, bands, pouches };
+  model.userData = { amountOverride: amount, knitPanel, knitHem, rig, right, left, axe, needleR, needleL, knitting, knitSleeves, tufts, tuftMeshes, stack, layers, offered, jigger, bands, pouches };
   pose(model, 'idle', 0);
   return model;
 }
@@ -599,53 +622,60 @@ const POSES = {
     if (!both) openHand(u.left, V(-0.3, -0.4, -0.52), V(0.15, -0.55, -1), V(1, 0.2, 0));
   },
   knit(u, t, amount) {
-    const { needleR, needleL, knitting, knitSleeves, right, left } = u;
-    const click = Math.sin(t * 2 * Math.PI * 2.2), lift = Math.max(0, click) * 0.025, lift2 = Math.max(0, -click) * 0.025;
+    const { needleR, needleL, knitting, knitSleeves, knitPanel, knitHem, right, left } = u;
+    const click = Math.sin(t * 2 * Math.PI * 2.2);
     needleL.visible = needleR.visible = knitting.visible = true;
-    // Fists low and apart, needles angled up and in so the tips cross over the work, clicking.
-    const lh = V(-0.19, -0.36 + lift2, -0.6), rh = V(0.19, -0.36 + lift, -0.6);
-    orient(needleL, lh, V(0.55, 0.62 + click * 0.06, -0.55), V(0, 0, 1));
-    orient(needleR, rh, V(-0.55, 0.62 - click * 0.06, -0.55), V(0, 0, 1));
-    gripOn(left, needleL, V(0, 0.09, 0), V(0, 1, 0), -0.5);
-    gripOn(right, needleR, V(0, 0.09, 0), V(0, 1, 0), -0.5);
-    // The Thneed hangs off the left needle, beyond the hands, and grows as it gets finished.
-    const a = clamp01(amount ?? 0.5);
+    // The left needle lies across in front, carrying the work; the right needle stabs in and out of the stitches.
+    const lh = V(-0.24, -0.14, -0.62);
+    orient(needleL, lh, V(1, 0.12, -0.05), V(0, 1, 0));
+    const rh = V(0.24, -0.22 + Math.max(0, click) * 0.02, -0.6);
+    orient(needleR, rh, V(-0.75, 0.42 + click * 0.1, -0.35), V(0, 0, 1));
+    gripOn(left, needleL, V(0, 0.04, 0), V(0, 1, 0), -0.3);
+    gripOn(right, needleR, V(0, 0.04, 0), V(0, 1, 0), -0.4);
+    // The work hangs off the left needle and grows longer as the Thneed gets finished.
+    const a = clamp01(amount ?? 0.5), len = mix(0.04, 0.24, a);
     needleL.updateMatrix();
-    const top = V(0, 0.3, 0).applyMatrix4(needleL.matrix);
-    knitting.position.copy(top).add(V(0.02, -0.01, -0.03));
-    knitting.rotation.set(0.1, 0.15, -0.08 + click * 0.03);
-    const k = 0.62;
-    knitting.scale.set(k * (0.5 + 0.5 * a), k * (0.12 + 0.88 * a), k * (0.7 + 0.3 * a));
-    knitSleeves.forEach((s, i) => { const g = smooth((a - 0.35 - i * 0.18) / 0.2); s.visible = g > 0.01; s.scale.setScalar(Math.max(0.01, g)); });
+    knitting.position.copy(V(0, 0.24, 0).applyMatrix4(needleL.matrix));
+    knitting.rotation.set(-0.12, 0, Math.atan2(0.12, 1) + click * 0.015);
+    knitPanel.scale.set(1, len, 1);
+    knitHem.position.set(0, -len, 0);
+    knitHem.scale.set(mix(0.85, 1.05, Math.min(1, len * 4)), 1, 1);
+    // Sleeves: positioned for a hanging Thneed, so slide them to the top corners of the work.
+    knitSleeves.forEach((s, i) => {
+      const g = smooth((a - 0.4 - i * 0.17) / 0.2);
+      s.visible = g > 0.01;
+      s.scale.setScalar(Math.max(0.01, g) * 0.8);
+      s.position.set(0, i === 2 ? len * 0.4 : 0, 0.01);
+    });
   },
   carry(u, t, amount) {
     const { tufts, tuftMeshes, right, left } = u;
     const n = Math.max(1, Math.min(3, Math.round(clamp01(amount ?? 1) * 3)));
     const breathe = Math.sin(t * 2.1) * 0.01;
     tufts.visible = true;
-    tufts.position.set(0, -0.36 + breathe, -0.7);
-    const spots = n === 1 ? [V(0.0, 0.03, 0)] : [V(0.03, -0.04, 0), V(0.17, 0.1, -0.08), V(-0.15, 0.12, -0.05)];
+    // Low in the arms, so the way ahead stays clear; the outer tufts ride up at the sides.
+    tufts.position.set(0, -0.45 + breathe, -0.62);
+    const spots = n === 1 ? [V(0.0, -0.06, 0)] : [V(0.0, -0.09, 0), V(0.31, 0.05, -0.04), V(-0.3, 0.06, -0.03)];
     tuftMeshes.forEach((m, i) => { m.visible = i < n; m.position.copy(spots[i] || spots[0]); m.rotation.set(0, i * 1.9, (i - 1) * -0.35); });
-    // Arms wrapped round the bundle, gloves spread over the front.
     // Gloves hug the bundle from below, fingers curling round its sides.
-    const w = n === 1 ? 0.15 : 0.2;
-    openHand(right, V(w, -0.4 + breathe, -0.62), V(-0.45, 0.6, -0.5), V(-1, 0.1, -0.4));
-    openHand(left, V(-w, -0.38 + breathe, -0.64), V(0.45, 0.6, -0.5), V(1, 0.1, -0.4));
+    const w = n === 1 ? 0.15 : 0.34;
+    openHand(right, V(w, -0.47 + breathe, -0.56), V(-0.45, 0.6, -0.5), V(-1, 0.1, -0.4));
+    openHand(left, V(-w, -0.45 + breathe, -0.58), V(0.45, 0.6, -0.5), V(1, 0.1, -0.4));
   },
   haul(u, t, amount) {
     const { stack, layers, right, left } = u;
     const n = 1 + Math.round(clamp01(amount ?? 1) * 4);
     const bob = Math.sin(t * 2 * Math.PI * 0.8) * 0.008;
     stack.visible = true;
-    stack.position.set(0, -0.4 + bob, -0.85);
+    stack.position.set(0, -0.5 + bob, -0.6);
     stack.rotation.set(0.22, 0.1, 0);
-    stack.scale.setScalar(0.85);
+    stack.scale.set(1.05, 0.75, 0.8);
     layers.forEach((l, i) => (l.visible = i < n));
     const h = n * 0.068;
-    // Gloves cupped round the two sides of the stack.
     // Gloves flat underneath, palms up, fingers curling round the bottom corners.
-    openHand(right, V(0.16, -0.44 + bob, -0.74), V(-0.45, 0.25, -1), V(-0.3, 1, 0));
-    openHand(left, V(-0.16, -0.44 + bob, -0.76), V(0.45, 0.25, -1), V(0.3, 1, 0));
+    // Gloves clamp the two sides of the stack, thumbs up.
+    openHand(right, V(0.2, -0.47 + bob, -0.55), V(-0.2, 0.75, -0.6), V(-1, 0, 0));
+    openHand(left, V(-0.2, -0.47 + bob, -0.56), V(0.2, 0.75, -0.6), V(1, 0, 0));
   },
   offer(u, t) {
     const { offered, right, left } = u;
@@ -684,10 +714,12 @@ function slingPose(u, t, aiming) {
   pouches.forEach((p) => (p.visible = true));
   // raise 0..0.2, draw 0.2..0.5, let go at 0.5, recover 0.65..1
   const raise = aiming ? 1 : smooth(t / 0.2) * (1 - smooth((t - 0.7) / 0.3));
-  const draw = aiming ? 0.75 + Math.sin(t * 1.7) * 0.03 : (t < 0.5 ? smooth((t - 0.15) / 0.33) : 0);
-  const sway = aiming ? Math.sin(t * 1.1) * 0.008 : 0;
-  const base = V(-0.05 + sway, mix(-0.6, -0.3, raise), mix(-0.45, -0.62, raise));
-  orient(jigger, base, V(0.05, 1, 0.12), V(1, 0, 0));
+  const draw = aiming ? 0.8 + Math.sin(t * 1.7) * 0.03 : (t < 0.5 ? smooth((t - 0.15) / 0.33) : 0);
+  const sway = aiming ? Math.sin(t * 1.1) * 0.006 : 0;
+  // Aiming, the Jigger is held ready off to the left and low, so the way ahead stays clear;
+  // firing, it comes up to the middle of the screen.
+  const base = aiming ? V(-0.46 + sway, -0.33, -0.62) : V(-0.05, mix(-0.6, -0.3, raise), mix(-0.45, -0.62, raise));
+  orient(jigger, base, aiming ? V(0.15, 1, 0.1) : V(0.05, 1, 0.12), V(1, 0, 0));
   gripOn(left, jigger, V(0, 0.08, 0), V(0, 1, 0));
   jigger.updateMatrix();
   const tips = PRONG_TIPS.map((p) => p.clone().applyMatrix4(jigger.matrix));
@@ -695,7 +727,7 @@ function slingPose(u, t, aiming) {
   const after = aiming ? 0 : clamp01((t - 0.5) / 0.25);
   // Where the slings are: drawn back to the right hand, or snapped forward past the prongs and wobbling home.
   const rest = mid.clone().add(V(0, -0.08, 0.04));
-  const pulled = V(0.15, -0.2, -0.5);
+  const pulled = aiming ? base.clone().add(V(0.12, 0.08, 0.13)) : V(0.15, -0.2, -0.5);
   let pinch;
   if (!aiming && t >= 0.5) {
     const flick = Math.sin(after * Math.PI * 3) * (1 - after) * 0.12;
@@ -707,7 +739,8 @@ function slingPose(u, t, aiming) {
     pouches[i].position.copy(pouch);
   });
   // Right hand pinches the pouches while drawing; flies open on release.
-  if (!aiming && t >= 0.5) openHand(right, V(0.14, -0.2 - after * 0.1, -0.36), V(-0.2, 0.6, -1), V(-0.3, 0, -1));
+  if (!aiming && t < 0.14) openHand(right, V(0.3, -0.45, -0.5), V(-0.3, 0.4, -1), V(-0.6, 0.2, -1));
+  else if (!aiming && t >= 0.5) openHand(right, V(0.14, -0.2 - after * 0.1, -0.36), V(-0.2, 0.6, -1), V(-0.3, 0, -1));
   else grip(right, pinch.clone().add(V(0.035, -0.01, 0.03)), V(0, 1, 0), 0.3);
 }
 

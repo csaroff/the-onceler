@@ -4,7 +4,7 @@
 // Every static object is drawn into a "sketch": a pile of small geometries, each painted one flat colour, then merged
 // into one lit mesh (plus one unlit mesh for window glass and eyes). Warps bend whole sketches so nothing stays square.
 import * as THREE from 'three';
-import { toon, flat, PALETTE, mergeGeometries, horn, pipe, lathe, seeded, signTexture } from '../toon.js';
+import { toon, flat, PALETTE, mergeGeometries, horn, pipe, lathe, seeded } from '../toon.js';
 
 const { PI, sin, cos, max, min, abs } = Math;
 
@@ -112,7 +112,8 @@ const GLASS = '#2f4a78';
 // A round window: a fat frame ring with dark glass and a cross. Built facing +z with its back on z = 0.
 function porthole(sk, r, frame, x, y, z, ry = 0) {
   const s = new Sketch();
-  s.add(new THREE.CylinderGeometry(r * 1.12, r * 1.18, 0.24, 10, 1).rotateX(PI / 2), frame);
+  s.add(new THREE.CylinderGeometry(r * 1.12, r * 1.18, 0.24, 10, 1, true).rotateX(PI / 2), frame);
+  s.add(new THREE.RingGeometry(r * 0.7, r * 1.12, 10, 1).translate(0, 0, 0.12), frame);
   s.shine(new THREE.CircleGeometry(r * 0.72, 10).translate(0, 0, 0.125), GLASS);
   s.add(new THREE.BoxGeometry(r * 1.5, 0.09, 0.07).translate(0, 0, 0.14), frame);
   s.add(new THREE.BoxGeometry(0.09, r * 1.5, 0.07).translate(0, 0, 0.14), frame);
@@ -200,17 +201,17 @@ function curlPoints(start, dir, size, turns = 1.2, side = 1, n = 14) {
 
 // A round witch-hat roof: a wide floppy brim, a concave cone that bends over to one side, and a tip that winds
 // into a curl with a ball on the end.
-function curlyRoof(sk, w, d, h, color, bend, r) {
+function curlyRoof(sk, w, d, h, color, bend, r, segments = 14) {
   const R = max(w, d) / 2 + 0.55;
   const s = new Sketch();
-  s.add(lathe([[R * 0.8, -0.05], [R * 1.02, -0.18], [R * 1.05, -0.05], [R * 0.72, h * 0.12], [R * 0.42, h * 0.32], [R * 0.24, h * 0.55], [R * 0.13, h * 0.78], [0.07, h]], 14)
+  s.add(lathe([[R * 0.8, -0.05], [R * 1.02, -0.18], [R * 1.05, -0.05], [R * 0.72, h * 0.12], [R * 0.42, h * 0.32], [R * 0.24, h * 0.55], [R * 0.13, h * 0.78], [0.07, h]], segments)
     .scale(1, 1, (d / 2 + 0.55) / R), color);
   s.warp((v) => { v.x += bend * (max(0, v.y) / h) ** 2.2; });
   // The tip carries on in the direction the cone was bending and rolls up into a curl.
   const side = bend > 0 ? 1 : -1;
   const tipX = bend, slope = 2.2 * bend / h;
   const curl = curlPoints([tipX, h - 0.05], Math.atan2(1, slope), h * 0.55, 1.1, side);
-  s.add(pipe(curl, (t) => 0.12 - 0.08 * t, 20, 6), color);
+  s.add(pipe(curl, (t) => 0.12 - 0.08 * t, segments, 5), color);
   const end = curl[curl.length - 1];
   s.add(ballAt(0.2, 0.2, 0.2, end[0], end[1], 0, BEAD), PALETTE.brass);
   sk.absorb(s);
@@ -225,7 +226,7 @@ function onionRoof(sk, w, d, h, color, bend, trim) {
   s.warp((v) => { v.x += bend * (max(0, v.y) / h) ** 2; });
   const side = bend > 0 ? 1 : -1;
   const curl = curlPoints([bend, h - 0.05], Math.atan2(1, 2 * bend / h), h * 0.4, 1.0, side);
-  s.add(pipe(curl, (t) => 0.09 - 0.05 * t, 14, 6), color);
+  s.add(pipe(curl, (t) => 0.09 - 0.05 * t, 12, 5), color);
   const end = curl[curl.length - 1];
   s.add(ballAt(0.18, 0.18, 0.18, end[0], end[1], 0, BEAD), PALETTE.brass);
   sk.absorb(s);
@@ -255,7 +256,7 @@ function gableRoof(sk, w, d, h, color, bend, trim) {
 function chimney(sk, x, y, z, height, color, r) {
   const wob = r(-0.35, 0.35);
   const pts = [[x, y, z], [x + 0.05, y + height * 0.4, z], [x - wob * 0.6, y + height * 0.75, z + wob * 0.3], [x + wob, y + height, z]];
-  sk.add(pipe(pts, 0.3, 8, 7), color);
+  sk.add(pipe(pts, 0.3, 6, 6), color);
   sk.add(lathe([[0.26, 0], [0.38, 0.05], [0.42, 0.22], [0.33, 0.32], [0.4, 0.45], [0.26, 0.45], [0.24, 0.3]], 9).translate(x + wob, y + height - 0.05, z), color);
   sk.add(new THREE.CircleGeometry(0.26, 9).rotateX(-PI / 2).translate(x + wob, y + height + 0.27, z), PALETTE.soot);
 }
@@ -327,8 +328,11 @@ function houseSketch(seed) {
       if (i === 1 && stairs) door(s, 0.95, min(h - 0.4, 1.85), doorColor, trim, stairs * (w / 2 - 0.05), 0.15, -d / 2 + 0.9, stairs * PI / 2, true);
     }
     // Side windows.
-    if (r() < 0.6 && !(i === 1 && stairs === 1)) porthole(s, 0.4, trim, w / 2 - 0.05, h * 0.55, r(-0.6, 0.6), PI / 2);
-    if (r() < 0.6 && !(i === 1 && stairs === -1)) porthole(s, 0.4, trim, -w / 2 + 0.05, h * 0.55, r(-0.6, 0.6), -PI / 2);
+    // A round window in the back of every other floor, so the house is not blank from behind.
+    if ((i + seed) % 2 === 0 && n < 4) porthole(s, 0.48, trim, r(-0.6, 0.6), h * 0.55, -d / 2 + 0.05, PI);
+    // One side window per floor, on alternate sides, unless the stair door is there.
+    const sideW = (i + seed) % 2 ? 1 : -1;
+    if (r() < 0.75 && !(i === 1 && stairs === sideW)) porthole(s, 0.42, trim, sideW * (w / 2 - 0.05), h * 0.55, r(-0.6, 0.6), sideW * PI / 2);
     // The floor bulges in the middle, tapers, and slides sideways a little as it rises.
     s.warp((v) => {
       const yn = THREE.MathUtils.clamp(v.y / h, 0, 1);
@@ -341,7 +345,7 @@ function houseSketch(seed) {
 
   if (stairs) {
     const f = floors[0], up = floors[1];
-    const N = Math.round(f.h / 0.26);
+    const N = Math.round(f.h / 0.34);
     const outer = (yn) => stairs * (f.w / 2 * (1 + f.bulge * sin(PI * yn)) * (1 + f.taper * (yn - 0.5)) + 0.55) + f.shear * yn;
     const zFront = f.d / 2 + 0.3, zBack = -f.d / 2 + 0.9;
     const rail = [], string = [];
@@ -359,9 +363,9 @@ function houseSketch(seed) {
     string.unshift([outer(0), 0, zFront + 0.2]);
     rail.unshift([outer(0) + stairs * 0.4, 0.95, zFront + 0.1]);
     rail.push([lx + stairs * 0.35, ly + 0.95, zBack - 0.6]);
-    sk.add(pipe(string, 0.1, 10, 5), PALETTE.wood);
-    sk.add(pipe(rail, 0.07, 14, 5), '#ffffff');
-    for (const [rx, ry, rz] of rail) sk.add(pipe([[rx, ry - 0.95, rz], [rx + 0.04, ry - 0.45, rz], [rx, ry, rz]], 0.05, 3, 5), '#ffffff');
+    sk.add(pipe(string, 0.1, 8, 4), PALETTE.wood);
+    sk.add(pipe(rail, 0.07, 10, 4), '#ffffff');
+    for (const [rx, ry, rz] of rail) sk.add(pipe([[rx, ry - 0.95, rz], [rx + 0.04, ry - 0.45, rz], [rx, ry, rz]], 0.05, 2, 4), '#ffffff');
   }
 
   // Roof on the top floor.
@@ -472,9 +476,9 @@ function lerkimSketch() {
 // A wooden bucket with an iron band and a handle; base at (x, y, z). The handle top is 0.45 * size above the base.
 function bucket(sk, x, y, z, size = 1) {
   const s = new Sketch();
-  s.add(lathe([[0, 0], [0.17, 0], [0.24, 0.3], [0.21, 0.3], [0.15, 0.04]], 12), PALETTE.wood);
-  s.add(new THREE.TorusGeometry(0.21, 0.025, 4, 12).rotateX(PI / 2).translate(0, 0.2, 0), PALETTE.soot);
-  s.add(new THREE.TorusGeometry(0.235, 0.025, 4, 10, PI).translate(0, 0.3, 0), PALETTE.soot);
+  s.add(lathe([[0, 0], [0.17, 0], [0.24, 0.3], [0.21, 0.3], [0.15, 0.04]], 10), PALETTE.wood);
+  s.add(new THREE.TorusGeometry(0.21, 0.03, 3, 8).rotateX(PI / 2).translate(0, 0.2, 0), PALETTE.soot);
+  s.add(new THREE.TorusGeometry(0.235, 0.03, 3, 6, PI).translate(0, 0.3, 0), PALETTE.soot);
   sk.absorb(s.move(0, 0, 0).warp((v) => v.multiplyScalar(size)).move(x, y, z));
 }
 
@@ -491,9 +495,9 @@ function hangingThneed(color) {
   t.lineTo(-0.3, -0.2); t.lineTo(-0.33, -0.44); t.lineTo(-0.42, -0.42); t.lineTo(-0.38, -0.12); // left sleeve
   t.quadraticCurveTo(-0.2, -0.02, -0.07, 0);
   const s = new Sketch();
-  s.add(new THREE.ExtrudeGeometry(t, { depth: 0.05, bevelEnabled: false, curveSegments: 3 }).translate(0, 0, -0.025), color);
+  s.add(new THREE.ShapeGeometry(t, 2), color);
   // A ribbed hem: a fat pink ridge the pen will draw.
-  s.add(new THREE.BoxGeometry(0.46, 0.06, 0.09).translate(0, -0.64, 0), '#ff9cc8');
+  s.add(new THREE.BoxGeometry(0.46, 0.07, 0.08).translate(0, -0.65, 0), '#ff9cc8');
   return s;
 }
 
@@ -512,18 +516,18 @@ function stallSketch(sk) {
   sk.absorb(top);
   // A tottering pile of folded Thneeds on the counter: soft pink slabs, each one askew.
   for (let i = 0; i < 4; i++) {
-    const fold = new THREE.BoxGeometry(0.5 - i * 0.03, 0.11, 0.36, 2, 1, 2);
+    const fold = new THREE.BoxGeometry(0.5 - i * 0.03, 0.11, 0.36);
     sk.add(put(fold, 0.6 + 0.05 * sin(i * 2.3), counterH + 0.16 + i * 0.12, 0.02, 0, 0.25 * sin(i * 1.9), 0.07 * sin(i * 1.7)), i % 2 ? '#ff9cc8' : PALETTE.thneedPink);
   }
   // Four bendy poles; the back pair is taller so the awning slopes to the front.
   const poles = [[-1.45, 0.55, 2.35], [1.45, 0.55, 2.3], [-1.45, -0.55, 2.75], [1.45, -0.55, 2.8]];
   for (const [x, z, h] of poles) {
     const s = Math.sign(x);
-    sk.add(pipe([[x, 0, z], [x + s * 0.06, h * 0.35, z], [x - s * 0.08, h * 0.7, z + 0.04], [x + s * 0.05, h, z]], 0.06, 5, 5), PALETTE.brass);
-    sk.add(ballAt(0.11, 0.11, 0.11, x + s * 0.05, h + 0.05, z, NUB), PALETTE.roofRed);
+    sk.add(pipe([[x, 0, z], [x + s * 0.06, h * 0.35, z], [x - s * 0.08, h * 0.7, z + 0.04], [x + s * 0.05, h, z]], 0.06, 4, 4), PALETTE.brass);
+    sk.add(ballAt(0.12, 0.12, 0.12, x + s * 0.05, h + 0.05, z, NUB), PALETTE.roofRed);
   }
   // Two curly brackets up from the back poles that hold the big sign.
-  for (const s of [-1, 1]) sk.add(pipe([[s * 1.5, 2.75, -0.55], [s * 1.35, 3.0, -0.5], [s * 1.0, 3.0, -0.5], [s * 0.85, 3.25, -0.5]], 0.05, 8, 5), PALETTE.brass);
+  for (const s of [-1, 1]) sk.add(pipe([[s * 1.5, 2.75, -0.55], [s * 1.35, 3.0, -0.5], [s * 1.0, 3.0, -0.5], [s * 0.85, 3.25, -0.5]], 0.05, 5, 4), PALETTE.brass);
   // The striped awning: red and white, bowed up in the middle, drooping at the front edge, with a scalloped hem.
   const at = (u, v) => {
     const x = -1.65 + u * 3.3;
@@ -540,7 +544,7 @@ function stallSketch(sk) {
   }
   // A sagging string under the front of the awning with three Thneeds pegged on it, swinging every which way.
   const line = (u) => [-1.4 + u * 2.8, 2.0 - 0.12 * sin(PI * u), 0.72];
-  sk.add(pipe([0, 0.25, 0.5, 0.75, 1].map(line), 0.018, 8, 4), '#ffffff');
+  sk.add(pipe([0, 0.25, 0.5, 0.75, 1].map(line), 0.02, 6, 3), '#ffffff');
   for (const [u, color, rz] of [[0.1, PALETTE.thneedPink, 0.12], [0.3, '#ff7fbf', -0.06], [0.88, PALETTE.thneedPink, -0.15]]) {
     const [x, y, z] = line(u);
     sk.absorb(hangingThneed(color).warp((v) => v.multiplyScalar(0.75)).move(x, y + 0.02, z, 0.05, 0, rz));
@@ -552,18 +556,18 @@ function stallSketch(sk) {
 
 function lampSketch(sk) {
   // A flared foot.
-  sk.add(lathe([[0.42, 0], [0.4, 0.1], [0.22, 0.2], [0.14, 0.45], [0.1, 0.6], [0, 0.6]], 10), PALETTE.soot);
+  sk.add(lathe([[0.42, 0], [0.4, 0.1], [0.22, 0.2], [0.14, 0.45], [0.1, 0.6], [0, 0.6]], 8), PALETTE.soot);
   // The post climbs, wobbles and hooks over in a crook.
   const post = [[0, 0.5, 0], [0.06, 1.4, 0], [-0.08, 2.3, 0], [0.02, 3.1, 0], [0.18, 3.65, 0], [0.55, 3.95, 0], [0.92, 3.85, 0], [1.08, 3.55, 0], [0.98, 3.3, 0], [0.82, 3.35, 0], [0.84, 3.52, 0]];
-  sk.add(pipe(post, (t) => 0.09 - 0.05 * t, 30, 6), PALETTE.soot);
+  sk.add(pipe(post, (t) => 0.09 - 0.05 * t, 24, 5), PALETTE.soot);
   // A flourish: a little curl off the post, the other way.
-  sk.add(pipe([[0, 2.5, 0], [-0.3, 2.65, 0], [-0.5, 2.9, 0], [-0.42, 3.15, 0], [-0.25, 3.12, 0], [-0.27, 2.98, 0]], (t) => 0.06 - 0.035 * t, 14, 5), PALETTE.soot);
-  // The lantern hangs from the crook: a hat, a glowing bulb, a little drip at the bottom.
-  const lx = 0.7, ly = 3.0;
-  sk.add(pipe([[0.72, 3.88, 0], [0.7, 3.65, 0], [lx, ly + 0.45, 0]], 0.03, 3, 5), PALETTE.soot);
-  sk.add(lathe([[0.3, 0], [0.2, 0.12], [0.08, 0.3], [0.03, 0.42]], 8).translate(lx, ly + 0.1, 0), PALETTE.teal);
-  sk.shine(ballAt(0.2, 0.26, 0.2, lx, ly - 0.08, 0), '#fff2a0');
-  sk.add(horn(0.18, 0.08, 0, 6).rotateX(PI).translate(lx, ly - 0.25, 0), PALETTE.teal);
+  sk.add(pipe([[0, 2.5, 0], [-0.3, 2.65, 0], [-0.5, 2.9, 0], [-0.42, 3.15, 0], [-0.25, 3.12, 0], [-0.27, 2.98, 0]], (t) => 0.06 - 0.035 * t, 10, 4), PALETTE.soot);
+  // The lantern hangs from the crook: a curly teal hat, a big glowing bulb, and a little drip at the bottom.
+  const lx = 0.72, ly = 2.85;
+  sk.add(pipe([[0.72, 3.88, 0], [0.71, 3.65, 0], [lx, ly + 0.55, 0]], 0.035, 3, 4), PALETTE.soot);
+  sk.add(lathe([[0.42, -0.04], [0.38, 0.04], [0.24, 0.14], [0.1, 0.36], [0.04, 0.52]], 8).translate(lx, ly + 0.1, 0), PALETTE.teal);
+  sk.shine(ballAt(0.27, 0.34, 0.27, lx, ly - 0.14, 0, BEAD), '#fff2a0');
+  sk.add(spike(0.22, 0.1, 0, 6, 1).rotateX(PI).translate(lx, ly - 0.38, 0), PALETTE.teal);
 }
 
 // ---------------------------------------------------------------- fence
@@ -571,20 +575,33 @@ function lampSketch(sk) {
 function fenceSketch(sk, seed) {
   const r = seeded(seed * 17 + 3);
   const paint = pickFrom(['#ffffff', PALETTE.paper, '#ffe08a', '#c9b3ff'], r);
-  const picket = (h) => {
+  // One picket: a fat board with a round or pointed top.
+  const picket = (h, pointed) => {
     const s = new THREE.Shape();
-    s.moveTo(-0.11, 0); s.lineTo(0.11, 0); s.lineTo(0.12, h - 0.18); s.quadraticCurveTo(0.08, h - 0.05, 0, h); s.quadraticCurveTo(-0.08, h - 0.05, -0.12, h - 0.18); s.lineTo(-0.11, 0);
-    return slab(s, 0.07, 3);
+    s.moveTo(-0.13, 0); s.lineTo(0.13, 0); s.lineTo(0.14, h - 0.2);
+    if (pointed) { s.lineTo(0.15, h - 0.24); s.lineTo(0.01, h); s.lineTo(-0.15, h - 0.26); }
+    else s.absarc(0, h - 0.2, 0.14, 0, PI, false);
+    s.lineTo(-0.13, 0);
+    return slab(s, 0.1, 3).translate(0, 0, -0.05);
   };
-  const count = 10;
-  for (let i = 0; i < count; i++) {
-    const x = -1.85 + i * (3.7 / (count - 1)) + r(-0.04, 0.04);
-    sk.add(put(picket(r(0.95, 1.3)), x, -0.05, 0, r(-0.08, 0.08), r(-0.15, 0.15), r(-0.14, 0.14)), paint);
-  }
-  for (const y of [0.32, 0.78]) {
+  // Two sagging rails behind the pickets.
+  for (const y of [0.3, 0.75]) {
     const pts = [];
-    for (let i = 0; i <= 5; i++) pts.push([-2 + i * 0.8, y + r(-0.06, 0.06) - 0.06 * sin(PI * i / 5), -0.06]);
-    sk.add(pipe(pts, 0.045, 10, 5), paint);
+    for (let i = 0; i <= 4; i++) pts.push([-1.95 + i * 0.975, y + r(-0.05, 0.05) - 0.08 * sin(PI * i / 4), -0.1]);
+    sk.add(pipe(pts, 0.05, 8, 5), PALETTE.wood);
+  }
+  // A stout post at each end with a ball on top.
+  for (const x of [-1.95, 1.95]) {
+    sk.add(pipe([[x, -0.05, -0.1], [x + r(-0.05, 0.05), 0.7, -0.1], [x + r(-0.1, 0.1), 1.35, -0.1]], 0.09, 4, 6), PALETTE.wood);
+    sk.add(ballAt(0.13, 0.13, 0.13, x, 1.42, -0.1, BEAD), paint);
+  }
+  // The pickets: uneven heights, every one leaning its own way, a couple badly.
+  const count = 9;
+  const pointed = true;
+  for (let i = 0; i < count; i++) {
+    const x = -1.6 + i * (3.2 / (count - 1)) + r(-0.04, 0.04);
+    const lean = i === 3 || i === 7 ? r(0.2, 0.3) * (i === 3 ? 1 : -1) : r(-0.1, 0.1);
+    sk.add(put(picket(r(1.0, 1.3), pointed), x, -0.05, 0, r(-0.12, 0.12), r(-0.2, 0.2), lean), paint);
   }
 }
 
@@ -592,26 +609,26 @@ function fenceSketch(sk, seed) {
 
 function wellSketch(sk) {
   // A round, bulging stone wall with a lip, dark water inside.
-  sk.add(lathe([[0.78, 0], [0.86, 0.12], [0.8, 0.42], [0.86, 0.66], [0.95, 0.76], [0.94, 0.88], [0.72, 0.88], [0.7, 0.55]], 12), '#a9a3c9');
-  sk.add(new THREE.CircleGeometry(0.72, 12).rotateX(-PI / 2).translate(0, 0.55, 0), PALETTE.water);
+  sk.add(lathe([[0.78, 0], [0.86, 0.12], [0.8, 0.42], [0.86, 0.66], [0.95, 0.76], [0.94, 0.88], [0.72, 0.88], [0.7, 0.55]], 9), '#a9a3c9');
+  sk.add(new THREE.CircleGeometry(0.72, 9).rotateX(-PI / 2).translate(0, 0.55, 0), PALETTE.water);
   // Two bent posts and a curly roof.
-  for (const s of [-1, 1]) sk.add(pipe([[s * 0.82, 0.6, 0], [s * 0.92, 1.3, 0], [s * 0.8, 2.05, 0]], 0.08, 6, 5), PALETTE.wood);
+  for (const s of [-1, 1]) sk.add(pipe([[s * 0.82, 0.6, 0], [s * 0.92, 1.3, 0], [s * 0.8, 2.05, 0]], 0.08, 4, 5), PALETTE.wood);
   const roof = new Sketch();
-  curlyRoof(roof, 1.6, 1.4, 1.2, PALETTE.roofRed, 0.4, () => 0.5);
+  curlyRoof(roof, 1.6, 1.4, 1.2, PALETTE.roofRed, 0.4, () => 0.5, 9);
   sk.absorb(roof.move(0, 2.0, 0));
   // The winding drum, the rope wound round it, and the crank.
   sk.add(new THREE.CylinderGeometry(0.06, 0.06, 1.9, 6).rotateZ(PI / 2).translate(0, 1.55, 0), PALETTE.wood);
-  sk.add(new THREE.CylinderGeometry(0.16, 0.16, 0.7, 10).rotateZ(PI / 2).translate(0, 1.55, 0), '#e8d7a8');
-  sk.add(pipe([[0.94, 1.55, 0], [1.08, 1.55, 0.02], [1.12, 1.35, 0.06], [1.12, 1.3, 0.25]], 0.05, 6, 5), PALETTE.soot);
-  sk.add(ballAt(0.07, 0.07, 0.07, 1.12, 1.3, 0.28, PEA), PALETTE.roofRed);
-  // The rope and the bucket.
-  sk.add(pipe([[0.1, 1.45, 0], [0.1, 1.3, 0], [0.1, 1.18, 0]], 0.03, 2, 5), '#e8d7a8');
-  bucket(sk, 0.1, 0.84, 0, 1);
+  sk.add(new THREE.CylinderGeometry(0.16, 0.16, 0.7, 8).rotateZ(PI / 2).translate(0, 1.55, 0), '#e8d7a8');
+  sk.add(pipe([[0.94, 1.55, 0], [1.08, 1.55, 0.02], [1.12, 1.35, 0.06], [1.12, 1.3, 0.25]], 0.05, 4, 4), PALETTE.soot);
+  sk.add(ballAt(0.08, 0.08, 0.08, 1.12, 1.3, 0.28, NUB), PALETTE.roofRed);
+  // The bucket sits up on the lip at the front, its rope looping up to the drum.
+  sk.add(pipe([[0.15, 1.42, 0.1], [0.3, 1.3, 0.5], [0.3, 1.25, 0.72]], 0.035, 5, 4), '#e8d7a8');
+  bucket(sk, 0.3, 0.86, 0.78, 1.3);
 }
 
 // ---------------------------------------------------------------- signpost
 
-// Lettering that always fits: like signTexture, but the type shrinks until the longest line fits the board, with
+// Lettering that always fits: like signTexture in toon.js, but the type shrinks until the longest line fits the board, with
 // a margin, and the letters are drawn a little wobbly, as if painted by hand.
 function boardTexture(lines, width, height, background = PALETTE.paper) {
   const canvas = document.createElement('canvas');
@@ -640,31 +657,44 @@ function boardTexture(lines, width, height, background = PALETTE.paper) {
   return tex;
 }
 
+// Splits a long name over two rows at the space nearest the middle.
+function wrap(line) {
+  if (line.length <= 14 || !line.includes(' ')) return [line];
+  let best = -1;
+  for (let i = 0; i < line.length; i++) if (line[i] === ' ' && (best < 0 || abs(i - line.length / 2) < abs(best - line.length / 2))) best = i;
+  return [line.slice(0, best), line.slice(best + 1)];
+}
+
 function signpost(lines) {
   const g = new THREE.Group();
   const sk = new Sketch();
-  const H = 2.3 + 0.45 * lines.length;
-  sk.add(pipe([[0, 0, 0], [0.06, H * 0.4, 0], [-0.04, H * 0.75, 0], [0.12, H, 0]], (t) => 0.1 - 0.03 * t, 10, 6), PALETTE.wood);
-  sk.add(ballAt(0.14, 0.14, 0.14, 0.12, H + 0.05, 0, PEA), PALETTE.roofRed);
+  const rows = lines.map(wrap);
+  const heights = rows.map((rw) => 0.3 + 0.28 * rw.length);
+  const H = 2.2 + heights.reduce((a, b) => a + b + 0.14, 0);
+  // The post wanders up and leans, with a red knob on top.
+  sk.add(pipe([[0, 0, 0], [0.06, H * 0.4, 0], [-0.04, H * 0.75, 0], [0.12, H, 0]], (t) => 0.11 - 0.03 * t, 10, 6), PALETTE.wood);
+  sk.add(ballAt(0.15, 0.15, 0.15, 0.12, H + 0.05, 0, BEAD), PALETTE.roofRed);
   const r = seeded(lines.join('').length + 3);
-  lines.forEach((line, i) => {
+  let y = H - 0.2;
+  rows.forEach((text, i) => {
+    const h = heights[i];
+    y -= h / 2;
     const dir = i % 2 ? -1 : 1;
-    const len = THREE.MathUtils.clamp(0.12 * line.length + 0.75, 1.3, 3.6), h = 0.5;
+    const longest = Math.max(...text.map((t) => t.length));
+    const len = THREE.MathUtils.clamp(0.13 * longest + 0.75, 1.3, 2.8);
     const s = new THREE.Shape();
     // An arrow-shaped board, the point on the far end.
-    s.moveTo(-0.12, -h / 2); s.lineTo(len - 0.3, -h / 2 - 0.03); s.lineTo(len, 0.02); s.lineTo(len - 0.28, h / 2 + 0.03); s.lineTo(-0.12, h / 2); s.lineTo(-0.12, -h / 2);
-    const y = H - 0.35 - i * 0.6, x = 0.03 + 0.05 * sin(i * 2.1);
+    s.moveTo(-0.12, -h / 2); s.lineTo(len - 0.32, -h / 2 - 0.03); s.lineTo(len, 0.02); s.lineTo(len - 0.3, h / 2 + 0.03); s.lineTo(-0.12, h / 2); s.lineTo(-0.12, -h / 2);
+    const x = 0.03 + 0.05 * sin(i * 2.1);
     const rz = r(-0.1, 0.1), ry = (dir > 0 ? 0 : PI) + r(-0.25, 0.25);
     const board = new THREE.ExtrudeGeometry(s, { depth: 0.08, bevelEnabled: false }).translate(0, 0, -0.04);
     sk.add(put(board, x, y, 0, 0, ry, rz), PALETTE.paper);
-    // The lettering, on both faces.
-    // The lettered plate runs from just past the post to the start of the point.
-    const from = 0.14, to = len - 0.3, plateW = to - from;
-    const tex = boardTexture([line], 1024, Math.round(1024 * (h - 0.06) / plateW));
-    const mat = flat('#ffffff', { map: tex });
+    // The lettering on both faces: a plate from just past the post to where the point begins.
+    const from = 0.14, to = len - 0.32, plateW = to - from;
+    const mat = flat('#ffffff', { map: boardTexture(text, 1024, Math.round(1024 * (h - 0.06) / plateW)) });
     for (const face of [1, -1]) {
       const plate = new THREE.Mesh(new THREE.PlaneGeometry(plateW, h - 0.06), mat);
-      plate.position.set(face > 0 ? (from + to) / 2 : (from + to) / 2, 0, face * 0.045);
+      plate.position.set((from + to) / 2, 0, face * 0.045);
       plate.rotation.y = face > 0 ? 0 : PI;
       const holder = new THREE.Group();
       holder.position.set(x, y, 0);
@@ -672,6 +702,7 @@ function signpost(lines) {
       holder.add(plate);
       g.add(holder);
     }
+    y -= h / 2 + 0.14;
   });
   meshes(sk.bake(), g);
   return g;
@@ -687,9 +718,9 @@ const HATS = ['stovepipe', 'nightcap', 'bowler', 'beret', 'none', 'stovepipe', '
 const NOSES = ['long', 'bulb', 'long', 'none', 'hook', 'bulb'];
 
 // Cheap low parts for the crowd: a little sphere, and a curling spike with few rings.
-const HEAD = new THREE.SphereGeometry(1, 16, 11);
+const HEAD = new THREE.SphereGeometry(1, 12, 8);
 // The top half of a ball: an eyelid. Its flat bottom edge is the lid line, which the pen draws.
-const LID = new THREE.SphereGeometry(1, 14, 5, 0, PI * 2, 0, PI / 2);
+const LID = new THREE.SphereGeometry(1, 8, 3, 0, PI * 2, 0, PI / 2);
 const BEAD = new THREE.SphereGeometry(1, 6, 4);
 const NUB = new THREE.SphereGeometry(1, 5, 3);
 function spike(length, radius, bend = 0, sides = 5, rings = 3) {
@@ -715,7 +746,7 @@ function personParts(seed) {
   const legColor = pickFrom(['#ffffff', PALETTE.soot, '#ffd23c', '#3c7fd6', '#ff5fa2'], r);
   const shoe = pickFrom([PALETTE.soot, '#8a5a2e', PALETTE.roofRed, '#3c7fd6'], r);
   const hat = HATS[seed % HATS.length], nose = NOSES[(seed * 2 + 1) % NOSES.length];
-  const hatH = { stovepipe: 0.38, nightcap: 0.3, bowler: 0.14, beret: 0.18, none: 0.2 }[hat] * k;
+  const hatH = { stovepipe: 0.46, nightcap: 0.44, bowler: 0.24, beret: 0.36, none: 0.24 }[hat] * k; // how far the hat stands above the head
 
   // Heights, bottom to top: shoes, a short stretch of leg, the coat (a pear), and a big round head; the hat on top
   // counts toward the height.
@@ -768,11 +799,11 @@ function personParts(seed) {
   const hand = [0.08 * k, -armLen - 0.05 * k, 0.04 * k];
   const arm = (s) => {
     const a = new Sketch();
-    a.add(pipe([[0, 0.02, 0], [s * 0.08 * k, -armLen * 0.3, 0], [s * 0.1 * k, -armLen * 0.65, 0.02 * k], [s * 0.08 * k, -armLen, 0.04 * k]], (t) => (0.05 - 0.012 * t) * k, 5, 5), coat);
+    a.add(pipe([[0, 0.02, 0], [s * 0.08 * k, -armLen * 0.3, 0], [s * 0.1 * k, -armLen * 0.65, 0.02 * k], [s * 0.08 * k, -armLen, 0.04 * k]], (t) => (0.05 - 0.012 * t) * k, 4, 4), coat);
     // A cuff, then the mitten: a palm, three fat fingers, and a thumb pointing forward.
     const hx = s * hand[0], hy = hand[1], hz = hand[2];
     a.add(ballAt(0.055 * k, 0.03 * k, 0.055 * k, hx, -armLen + 0.005, hz, NUB), accent);
-    a.add(ballAt(0.07 * k, 0.07 * k, 0.05 * k, hx, hy, hz, BEAD), glove);
+    a.add(ballAt(0.07 * k, 0.07 * k, 0.05 * k, hx, hy, hz, NUB), glove);
     for (let f = -1; f <= 1; f++) a.add(ballAt(0.028 * k, 0.05 * k, 0.03 * k, hx + f * 0.042 * k, hy - 0.07 * k + abs(f) * 0.012 * k, hz, NUB), glove);
     a.add(ballAt(0.025 * k, 0.045 * k, 0.025 * k, hx - s * 0.03 * k, hy - 0.01 * k, hz + 0.055 * k, NUB), glove);
     return a.bake();
@@ -814,7 +845,7 @@ function personParts(seed) {
   if (nose === 'bulb') head.add(ballAt(0.055 * k, 0.05 * k, 0.05 * k, 0, hy - 0.02 * k, noseZ + 0.02, BEAD), noseColor);
   // Tufts of hair sticking out over the ears, curling up.
   for (const s of [-1, 1]) for (let i = 0; i < 2; i++) {
-    head.add(put(spike(r(0.13, 0.17) * k, 0.06 * k, s * 0.09 * k, 5, 3), s * headR * 0.82, hy + 0.0 * k - i * 0.07 * k, -0.03 * k - i * 0.05 * k, 0, 0, -s * (1.3 + i * 0.4)), hair);
+    head.add(put(spike(r(0.13, 0.17) * k, 0.06 * k, s * 0.09 * k, 5, 2), s * headR * 0.82, hy + 0.0 * k - i * 0.07 * k, -0.03 * k - i * 0.05 * k, 0, 0, -s * (1.3 + i * 0.4)), hair);
   }
   // The hat, tipped at an angle.
   const crown = hy + headR * 0.95;
@@ -829,8 +860,8 @@ function personParts(seed) {
   } else if (hat === 'nightcap') {
     // A floppy stocking cap that flops over to one side and ends in a pompom.
     const cap = accent === '#ffffff' ? '#ff5fa2' : accent;
-    hatSk.add(spike(0.42 * k, headR * 0.98, 0.3 * k, 9, 5), cap);
-    hatSk.add(new THREE.TorusGeometry(headR * 0.93, 0.045 * k, 4, 10).rotateX(PI / 2).translate(0, 0.02, 0), '#ffffff');
+    hatSk.add(spike(0.42 * k, headR * 0.98, 0.3 * k, 8, 4), cap);
+    hatSk.add(new THREE.TorusGeometry(headR * 0.93, 0.05 * k, 3, 9).rotateX(PI / 2).translate(0, 0.02, 0), '#ffffff');
     hatSk.add(ballAt(0.07 * k, 0.07 * k, 0.07 * k, 0.3 * k, 0.43 * k, 0, NUB), '#ffffff');
   } else if (hat === 'bowler') {
     hatSk.add(new THREE.SphereGeometry(headR * 0.86, 10, 4, 0, PI * 2, 0, PI / 2).scale(1, 1.1, 1), hatColor);
@@ -853,7 +884,7 @@ function personParts(seed) {
   for (const s of [-1, 1]) lids.add(ballAt(eyeR[0] * 1.14, 1, eyeR[2] * 1.75, s * eyeX, 0, eyeZ + 0.002, LID), skin);
   // Happy closed eyes: two little upside-down U's, for when they are delighted.
   const happy = new Sketch();
-  for (const s of [-1, 1]) happy.add(pipe([[-0.045 * k, -0.025 * k, -0.006], [-0.025 * k, 0.012 * k, 0.002], [0.025 * k, 0.012 * k, 0.002], [0.045 * k, -0.025 * k, -0.006]], 0.014 * k, 5, 4).translate(s * eyeX, eyeY - 0.01 * k, eyeZ + eyeR[2] * 1.8 + 0.006), PALETTE.ink);
+  for (const s of [-1, 1]) happy.add(pipe([[-0.045 * k, -0.025 * k, -0.006], [-0.025 * k, 0.012 * k, 0.002], [0.025 * k, 0.012 * k, 0.002], [0.045 * k, -0.025 * k, -0.006]], 0.014 * k, 4, 4).translate(s * eyeX, eyeY - 0.01 * k, eyeZ + eyeR[2] * 1.8 + 0.006), PALETTE.ink);
   // Three mouths: a wide smile, a grin with the mouth open, and an "O" of alarm.
   const mouthY = hy - 0.085 * k, mouthZ = surfaceZ(0, mouthY) - 0.004;
   const smile = new Sketch();
@@ -864,41 +895,36 @@ function personParts(seed) {
   const gasp = new Sketch();
   gasp.add(ballAt(0.035 * k, 0.05 * k, 0.025 * k, 0, mouthY - 0.015 * k, mouthZ - 0.006, NUB), '#5a1a24');
 
+  // Measure how tall the finished figure really is (a tipped hat or a tall tuft can add a bit), and note the scale
+  // that keeps everyone between 1.5 and 1.9 m.
+  const headBaked = head.bake();
+  headBaked.lit.computeBoundingBox();
+  const realTop = pivotY + headBaked.lit.boundingBox.max.y;
+  const fit = THREE.MathUtils.clamp(realTop, 1.5, 1.9) / realTop;
+
   const parts = {
-    H, k, hipY, hipX, shoulderY, shoulderX, pivotY, eyeY, eyeR, hand, armLen, headR, hy,
+    fit, H, k, hipY, hipX, shoulderY, shoulderX, pivotY, eyeY, eyeR, hand, armLen, headR, hy,
     body: body.bake(), legL: leg(1), legR: leg(-1), armL: arm(1), armR: arm(-1), billL: bill(1), billR: bill(-1),
-    head: head.bake(), lids: lids.bake(), happy: happy.bake(), smile: smile.bake(), grin: grin.bake(), gasp: gasp.bake(),
+    head: headBaked, lids: lids.bake(), happy: happy.bake(), smile: smile.bake(), grin: grin.bake(), gasp: gasp.bake(),
   };
   peopleCache.set(seed, parts);
   return parts;
 }
 
-// The pink Thneed: a floppy knitted thing with a neck, a ribbed hem and too many sleeves. It is held by its neck,
-// which is at the origin; everything else hangs below.
+// The pink Thneed for showing off: the same cut-out as the ones hanging at the stall (see hangingThneed), scaled up
+// and draped into a soft curve, as if held up by its shoulders. Its neck is at the origin and its shoulders are at
+// x = +-0.42, where the hands hold it.
 let thneedBaked = null;
 function thneedGeometry() {
   if (thneedBaked) return thneedBaked;
-  const sk = new Sketch(), pink = PALETTE.thneedPink, rib = '#ff9cc8';
-  // The main body, a soft sagging sack, flattened front to back.
-  sk.add(lathe([[0.01, -0.58], [0.22, -0.56], [0.27, -0.42], [0.24, -0.24], [0.26, -0.12], [0.15, -0.06], [0.06, -0.04], [0.01, -0.04]], 8).scale(1.1, 1, 0.5), pink);
-  // A ribbed hem and a ribbed neck: grooves the pen catches, so it reads as knitting.
-  sk.add(new THREE.TorusGeometry(0.25, 0.04, 4, 8).rotateX(PI / 2).scale(1.1, 1, 0.5).translate(0, -0.56, 0), rib);
-  sk.add(new THREE.TorusGeometry(0.07, 0.035, 4, 8).rotateX(PI / 2).translate(0, -0.04, 0), rib);
-  sk.add(new THREE.TorusGeometry(0.255, 0.025, 4, 8).rotateX(PI / 2).scale(1.08, 1, 0.5).translate(0, -0.32, 0), rib);
-  // Sleeves, every which way, each with a ribbed cuff. The first two reach up and out to the hands holding it
-  // (cuffs at x = +-0.42, y = 0); the rest dangle.
-  const sleeves = [
-    [[0.2, -0.1, 0], [0.32, -0.08, 0.01], [0.42, 0, 0.02]],
-    [[-0.2, -0.1, 0], [-0.32, -0.08, 0.01], [-0.42, 0, 0.02]],
-    [[0.24, -0.25, 0.02], [0.36, -0.42, 0.05], [0.34, -0.66, 0.04]],
-    [[-0.24, -0.25, 0.02], [-0.38, -0.45, 0.04], [-0.33, -0.7, 0.02]],
-    [[0.1, -0.45, 0.06], [0.16, -0.66, 0.08], [0.08, -0.84, 0.08]],
-  ];
-  for (const s of sleeves) {
-    sk.add(pipe(s, (t) => 0.065 - 0.012 * t, 5, 5), pink);
-    const e = s[s.length - 1];
-    sk.add(new THREE.TorusGeometry(0.055, 0.025, 4, 6).rotateX(PI / 2).translate(e[0], e[1], e[2]), rib);
-  }
+  const sk = hangingThneed(PALETTE.thneedPink);
+  // A second, smaller pink ridge across the middle: knitted ribbing the pen draws.
+  sk.add(new THREE.BoxGeometry(0.42, 0.06, 0.07).translate(0, -0.34, 0), '#ff9cc8');
+  sk.add(new THREE.TorusGeometry(0.08, 0.035, 3, 6).rotateX(PI / 2).translate(0, -0.01, 0), '#ff9cc8');
+  sk.warp((v) => {
+    v.x *= 1.05;
+    v.z += 0.12 * (1 - (v.x / 0.45) ** 2) + 0.05 * sin(v.y * 9); // bellies out toward the viewer, and ripples
+  });
   thneedBaked = sk.bake();
   return thneedBaked;
 }
@@ -906,8 +932,12 @@ function thneedGeometry() {
 function person(seed) {
   const p = personParts(seed);
   const root = new THREE.Group();
+  // `fit` keeps everyone between 1.5 and 1.9 m tall; it sits on an inner group so the game can scale the root.
+  const fitted = new THREE.Group();
+  fitted.scale.setScalar(p.fit);
   const body = new THREE.Group();
-  root.add(body);
+  root.add(fitted);
+  fitted.add(body);
   meshes(p.body, body);
   const part = (baked, x, y, z, parent = body) => {
     const g = meshes(baked);
@@ -1008,16 +1038,17 @@ export function pose(model, name, t = 0, amount = 0) {
     head.rotation.x = -0.15; head.rotation.z = 0.12 * sin(c);
     lid = 2; face = 'grin';
   } else if (name === 'cheer') {
-    // Delighted: both arms come up holding the new Thneed out in front by two of its sleeves, a little jump, eyes
-    // squeezed shut in happy arcs, mouth wide open.
+    // Delighted: one arm swings the new Thneed up and out to the side to show it off, the other is flung up in joy;
+    // a little jump, eyes squeezed shut in happy arcs, mouth wide open.
     const up = smooth(0, 0.3, t);
     const jump = sin(PI * smooth(0.3, 0.8, t));
     body.position.y = jump * 0.2 * k;
     legL.rotation.x = -0.5 * jump; legR.rotation.x = -0.2 * jump;
-    armL.rotation.x = armR.rotation.x = -1.65 * up - 0.15 * jump;
-    armL.rotation.z = 0.15 + 0.35 * up; armR.rotation.z = -armL.rotation.z;
-    body.rotation.x = -0.1 * jump;
-    head.rotation.x = -0.25 * up; head.rotation.z = 0.12 * jump;
+    armL.rotation.z = 0.15 + up * 1.85 + 0.1 * jump;
+    armL.rotation.x = -0.3 * up;
+    armR.rotation.z = -0.15 - up * 2.55 - 0.15 * jump;
+    body.rotation.z = -0.06 * up;
+    head.rotation.x = -0.2 * up; head.rotation.z = -0.1 * up + 0.08 * jump;
     eyesShut = up > 0.4; face = 'grin';
     holding = true;
   } else if (name === 'flee') {
@@ -1054,13 +1085,14 @@ export function pose(model, name, t = 0, amount = 0) {
   hold(billL, armL, bills); hold(billR, armR, bills);
   hold(thneed, body, holding);
   if (holding) {
-    // The Thneed's two top cuffs are in the two mittens; it is stretched to fit the gap between them.
-    armL.updateMatrix(); armR.updateMatrix();
-    const hand = new THREE.Vector3(p.hand[0], p.hand[1] + 0.02 * k, p.hand[2]);
-    const left = hand.clone().applyMatrix4(armL.matrix), right = hand.set(-hand.x, hand.y, hand.z).applyMatrix4(armR.matrix);
-    thneed.position.addVectors(left, right).multiplyScalar(0.5);
-    thneed.position.z += 0.03;
-    thneed.scale.set(max(0.25, (left.x - right.x) / 2) / 0.42, k * 0.75, k * 0.75);
-    thneed.rotation.set(0, 0, 0.05 * sin(t * 14));
+    // The Thneed hangs by one shoulder from the raised left mitten, swinging a little, turned to face front.
+    armL.updateMatrix();
+    const hand = new THREE.Vector3(p.hand[0], p.hand[1] - 0.02 * k, p.hand[2]).applyMatrix4(armL.matrix);
+    thneed.scale.setScalar(k * 0.85);
+    thneed.rotation.set(0, 0, 0.12 - body.rotation.z + 0.08 * sin(t * 14));
+    // Its left shoulder (x = -0.4, y = -0.12 on the cut-out) goes in the hand.
+    const shoulder = new THREE.Vector3(-0.4, -0.1, 0).multiply(thneed.scale).applyEuler(thneed.rotation);
+    thneed.position.copy(hand).sub(shoulder);
+    thneed.position.z += 0.05;
   }
 }
