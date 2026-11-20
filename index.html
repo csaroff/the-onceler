@@ -3,40 +3,54 @@
 <head>
 <meta charset="utf-8">
 <title>The Once-ler</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&display=swap">
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: Georgia, serif; color: #fff; }
+  /* The display font draws 0 like a small o, which is no good for money. Take the digits from a plainer face. */
+  @font-face { font-family: 'Digits'; src: local('Arial Rounded MT Bold'), local('Arial Black'), local('Arial Bold'); unicode-range: U+30-39, U+24, U+2E; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: #fff;
+               font-family: 'Digits', 'Mountains of Christmas', Georgia, serif; font-weight: 700; }
   canvas { display: block; }
+  .ink { text-shadow: 2px 2px 0 #17110d, -2px 2px 0 #17110d, 2px -2px 0 #17110d, -2px -2px 0 #17110d, 0 3px 6px #000; }
   #crosshair { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #fff; opacity: .7; }
-  #hud { position: fixed; left: 16px; top: 14px; font-size: 16px; line-height: 1.5; text-shadow: 0 1px 3px #000; }
-  #hud b { font-size: 20px; }
-  #build { position: fixed; left: 16px; bottom: 14px; font-size: 14px; line-height: 1.6; text-shadow: 0 1px 3px #000; }
-  #build .off { opacity: .45; }
+  #money { position: fixed; top: 6px; left: 0; right: 0; text-align: center; font-size: 62px; color: #ffe36b; transition: transform .12s; }
+  #money.bump { transform: scale(1.18); }
+  #pops { position: fixed; top: 78px; left: 0; right: 0; height: 0; text-align: center; }
+  .pop { position: absolute; left: 0; right: 0; font-size: 30px; color: #8dff7a; animation: rise 1.3s ease-out forwards; }
+  .pop.spend { color: #ff8a7a; }
+  @keyframes rise { from { transform: translateY(18px); opacity: 1; } to { transform: translateY(-26px); opacity: 0; } }
+  #hud { position: fixed; left: 18px; top: 14px; font-size: 22px; line-height: 1.35; }
+  #build { position: fixed; left: 18px; bottom: 14px; font-size: 21px; line-height: 1.45; }
+  #build .off { opacity: .5; }
   #build .sel { color: #ffe36b; }
-  #caption { position: fixed; left: 0; right: 0; bottom: 16%; text-align: center; font-size: 24px; font-style: italic;
-             text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity .8s; padding: 0 10%; z-index: 5; }
+  #caption { position: fixed; left: 0; right: 0; bottom: 17%; text-align: center; font-size: 34px;
+             opacity: 0; transition: opacity .8s; padding: 0 10%; z-index: 5; }
+  #caption.lorax { color: #ffb347; font-size: 38px; }
   .bar { position: fixed; left: 0; right: 0; height: 0; background: #000; transition: height 1.2s; z-index: 4; }
   #barTop { top: 0; } #barBottom { bottom: 0; }
   body.cutscene .bar { height: 13%; }
-  body.cutscene #hud, body.cutscene #build, body.cutscene #crosshair { opacity: 0; }
+  body.cutscene #hud, body.cutscene #build, body.cutscene #crosshair, body.cutscene #money, body.cutscene #pops { opacity: 0; }
+  body.title #hud, body.title #build, body.title #crosshair, body.title #money { opacity: 0; }
   #fade { position: fixed; inset: 0; background: #000; opacity: 0; transition: opacity 2s; pointer-events: none; z-index: 3; }
   #start { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-           background: rgba(10, 30, 10, .25); text-shadow: 0 2px 8px #000; cursor: pointer; z-index: 10; text-align: center; }
-  #start h1 { font-size: 64px; margin: 0 0 8px; font-weight: normal; }
-  #start p { margin: 4px; font-size: 17px; opacity: .9; }
+           background: rgba(10, 30, 10, .2); cursor: pointer; z-index: 10; text-align: center; }
+  #start h1 { font-size: 110px; margin: 0; color: #ffe36b; }
+  #start p { margin: 4px; font-size: 28px; }
 </style>
 </head>
-<body>
-<div id="hud"></div>
-<div id="build"></div>
+<body class="title">
+<div id="money" class="ink">$0.00</div>
+<div id="pops" class="ink"></div>
+<div id="hud" class="ink"></div>
+<div id="build" class="ink"></div>
 <div id="crosshair"></div>
-<div id="caption"></div>
+<div id="caption" class="ink"></div>
 <div id="barTop" class="bar"></div><div id="barBottom" class="bar"></div>
 <div id="fade"></div>
-<div id="start">
+<div id="start" class="ink">
   <h1>The Once-ler</h1>
   <p>It is a beautiful morning. You have an axe.</p>
-  <p style="margin-top:22px">Click to begin</p>
-  <p style="font-size:14px;opacity:.7">WASD move · Shift run · Space jump · Click chop · 1 / 2 build · Q cancel</p>
+  <p style="margin-top:26px">Click to begin</p>
+  <p style="font-size:20px">WASD move · Shift run · Space jump · Click chop · 1 2 3 buy · Q cancel</p>
 </div>
 <script type="module" src="/src/main.js"></script>
 </body>

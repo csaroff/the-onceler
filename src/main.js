@@ -1,12 +1,13 @@
-// The Once-ler: first slice, "the fall from paradise".
-// You, an axe, a valley. `ruin` (0 -> 1, the share of trees felled) drives everything that goes wrong.
+// The Once-ler: "the fall from paradise".
+// You, an axe, a valley, and a price of $3.98. `ruin` (0 -> 1, the share of trees felled) drives everything that goes wrong.
 import * as THREE from 'three';
-import { createWorld, groundHeight, fellTree, lerp, FOREST_RADIUS } from './world.js';
-import { createSwans, createButterflies, createLoots, createWatcher } from './creatures.js';
+import { createWorld, groundHeight, fellTree, FOREST_RADIUS, HOME } from './world.js';
+import { createSwans, createButterflies, createFish, createLoots, createLorax } from './creatures.js';
 import { createFactory, BLUEPRINTS } from './factory.js';
 import { createAudio } from './audio.js';
 
 const EYE_HEIGHT = 1.7, WALK = 6, RUN = 11, REACH = 4.5, TUFTS_PER_TREE = 3;
+const dollars = (n) => `$${n.toFixed(2)}`;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
@@ -18,17 +19,18 @@ const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerH
 camera.rotation.order = 'YXZ';
 scene.add(camera);
 
-const stock = { tufts: 0, thneeds: 0 };
-const player = { x: 0, z: 0, y: 0, vy: 0, yaw: 0, pitch: 0 };
+const stock = { money: 0, tufts: 0, thneeds: 0, sold: 0 };
+const player = { x: 0, z: 0, y: 0, vy: 0, yaw: -0.6, pitch: 0 }; // facing your cart
 const story = { felled: 0, ruin: 0, swing: 0, building: null, cutscene: null, seen: new Set(), started: false };
 
 const world = createWorld(scene);
 const swans = createSwans(scene);
 const butterflies = createButterflies(scene);
-const loots = createLoots(scene);
-const watcher = createWatcher(scene);
+const fish = createFish(scene);
+const loots = createLoots(scene, world.trees);
+const lorax = createLorax(scene);
 const audio = createAudio();
-const factory = createFactory(scene, world.trees, stock, onTreeFelled);
+const factory = createFactory(scene, world.trees, stock, { onTreeFelled, onSale });
 
 // --- the axe, held in the bottom right of the view
 const axe = new THREE.Group();
@@ -47,7 +49,8 @@ const captionEl = document.getElementById('caption');
 const captionQueue = [];
 let captionTimer = 0;
 
-function say(text, seconds = 4.5) { captionQueue.push({ text, seconds }); }
+function say(text, seconds = 4.5, lorax = false) { captionQueue.push({ text, seconds, lorax }); }
+const loraxSays = (text, seconds = 6) => say(`“${text}”`, seconds, true);
 
 // Each beat fires once, the first time its condition is met.
 function beat(name, text) {
@@ -64,6 +67,7 @@ function updateCaptions(dt) {
   if (captionTimer < -0.9 && captionQueue.length) { // let the old line fade before the next
     const next = captionQueue.shift();
     captionEl.textContent = next.text;
+    captionEl.classList.toggle('lorax', next.lorax);
     captionEl.style.opacity = 1;
     captionTimer = next.seconds;
   }
@@ -77,29 +81,56 @@ function onTreeFelled() {
   story.felled++;
   stock.tufts += TUFTS_PER_TREE;
   audio.crash();
-  if (beat('firstTree', 'It was only one tree.')) {
-    say('Someone is standing on the ridge.');
-    watcher.appear(player, viewDirection());
+  // He is not there until you have done something to answer for.
+  if (beat('firstTree', 'The touch of its tuft is much softer than silk.')) {
+    lorax.appear(player, viewDirection());
+    say('Something very large has stood up on the ridge.');
+    loraxSays('I am the Lorax. I speak for the trees.');
   }
+}
+
+// ---------------------------------------------------------------- money
+
+const moneyEl = document.getElementById('money'), popsEl = document.getElementById('pops');
+
+function pop(text, spend = false) {
+  const el = document.createElement('div');
+  el.className = spend ? 'pop spend' : 'pop';
+  el.textContent = text;
+  popsEl.append(el);
+  setTimeout(() => el.remove(), 1300);
+  moneyEl.classList.add('bump');
+  setTimeout(() => moneyEl.classList.remove('bump'), 130);
+}
+
+function onSale(amount) {
+  audio.kaChing();
+  pop(`+${dollars(amount)}`);
+  beat('firstSale', 'Three ninety-eight. It was that easy.');
 }
 
 function checkBeats() {
   const left = world.trees.length - story.felled;
-  if (stock.tufts >= BLUEPRINTS.knitter.cost.tufts) beat('canKnit', 'That is enough tufts for a Thneed Knitter. Press 1.');
-  if (stock.thneeds >= BLUEPRINTS.hacker.cost.thneeds) beat('canHack', 'Chopping one tree at a time is too slow. Press 2.');
-  if (story.ruin > 0.12) beat('swans', 'The Swomee-Swans have stopped singing.');
-  if (story.ruin > 0.3) beat('loots', 'The Bar-ba-loots are not playing any more. They are just looking at you.');
+  if (factory.canAfford('factory')) beat('canBuild', 'You can afford a Thneed Factory. Press 1.');
+  if (story.ruin > 0.12 && beat('swans', 'The Swomee-Swans have stopped singing.')) {
+    loraxSays('The trees have no tongues. They do, however, have me.');
+  }
+  if (story.ruin > 0.3 && beat('loots', 'The Bar-ba-loots have come down out of the trees. They are just looking at you.')) {
+    loraxSays('You have made your position clear. I am making mine.');
+  }
   if (story.ruin > 0.5 && beat('march')) startMarch();
-  if (story.ruin > 0.75) beat('close', 'He is much closer now.');
+  if (story.ruin > 0.75 && beat('close', 'The ridge is crowded now.')) {
+    loraxSays('Business is business, you said. So is this.');
+  }
   if (left === 0 && !story.cutscene && beat('end', 'That was the very last Truffula Tree of them all.')) {
-    say('He has stopped watching.');
-    say('Something is coming over the ridge.', 8);
+    say('He did not lift himself away. He is still up there.');
+    loraxSays('UNLESS.', 8);
   }
 }
 
 // ---------------------------------------------------------------- the relocation march
 
-const MARCH_SECONDS = 26;
+const MARCH_SECONDS = 28;
 const fadeEl = document.getElementById('fade');
 
 function startMarch() {
@@ -112,24 +143,24 @@ function startMarch() {
   captionTimer = 0;
   say('There is not enough Truffula Fruit to go round.', 5);
   say('The Bar-ba-loots have been offered relocation.', 5);
-  say('They were not asked twice.', 5);
+  loraxSays('I am sending them off. You will be seeing them again.', 6);
   say('Nobody waves.', 5);
-  // He oversees it. He does not look at them; he looks at you.
-  watcher.pin(20, -7, 8, 15, 1.8);
+  // They walk east, toward the ridge, and he is standing at the end of the road.
+  lorax.pin(0, { x: -30, z: 6 });
 }
 
 function updateMarch(dt) {
   const cut = story.cutscene;
   cut.t += dt;
   loots.march(cut.t, -12);
-  const camX = 8 + cut.t * 0.12; // slow dolly, like someone who can't look away
-  camera.position.set(camX, groundHeight(camX, 15) + 1.5, 15);
-  camera.lookAt(camX - 3 + cut.t * 0.5, groundHeight(0, 0) + 0.8, 0);
+  const camX = -26 + cut.t * 0.25; // behind the column, creeping after it
+  camera.position.set(camX, groundHeight(camX, 6) + 2.4, 6);
+  camera.lookAt(60, 9, 0);
 
   if (cut.t > MARCH_SECONDS - 2.5) fadeEl.style.opacity = 1;
   if (cut.t > MARCH_SECONDS) {
     loots.remove();
-    watcher.release();
+    lorax.release();
     story.cutscene = null;
     document.body.classList.remove('cutscene');
     axe.visible = true;
@@ -144,12 +175,12 @@ const keys = {};
 // Pointer lock can be refused (no user gesture, embedded frame); the game still runs without mouse-look.
 const lockPointer = () => renderer.domElement.requestPointerLock()?.catch(() => {});
 const startEl = document.getElementById('start');
+const buildKeys = Object.fromEntries(Object.entries(BLUEPRINTS).map(([type, bp]) => [`Digit${bp.key}`, type]));
 
 addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (!story.started || story.cutscene) return;
-  if (e.code === 'Digit1') story.building = 'knitter';
-  if (e.code === 'Digit2') story.building = 'hacker';
+  if (buildKeys[e.code]) story.building = buildKeys[e.code];
   if (e.code === 'KeyQ' || e.code === 'Escape') story.building = null;
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -162,11 +193,12 @@ addEventListener('mousemove', (e) => {
 
 startEl.addEventListener('click', () => {
   startEl.style.display = 'none';
+  document.body.classList.remove('title');
   story.started = true;
   axe.visible = true;
   audio.start();
   lockPointer();
-  say('The Truffula Trees are in bloom. The Swomee-Swans are singing.', 5);
+  say('The Truffula Trees are in bloom. The Bar-ba-loots are playing in the shade.', 5);
   say('You could knit something marvellous out of those tufts.', 5);
 });
 
@@ -184,16 +216,22 @@ addEventListener('resize', () => {
 
 function buildSpot() {
   const dir = viewDirection();
-  return { x: player.x + dir.x * 7, z: player.z + dir.z * 7 };
+  return { x: player.x + dir.x * 9, z: player.z + dir.z * 9 };
 }
+
+const PURCHASE_LINES = {
+  factory: 'A Thneed’s a Fine-Something-That-All-People-Need!',
+  wagon: 'Shipping them forth, to the South! To the East! To the West! To the North!',
+  hacker: 'It whacks off four Truffula Trees at one smacker.',
+};
 
 function primaryAction() {
   if (story.building) {
-    const spot = buildSpot();
-    if (factory.place(story.building, spot.x, spot.z)) {
-      audio.clank();
-      if (story.building === 'knitter') beat('knitter', "A Thneed's a Fine-Something-That-All-People-Need.");
-      if (story.building === 'hacker') beat('hacker', 'Business is business. And business must grow.');
+    const type = story.building, cost = factory.price(type), spot = buildSpot();
+    if (factory.place(type, spot.x, spot.z)) {
+      audio.purchase();
+      pop(`−${dollars(cost)}`, true);
+      if (!beat(type, PURCHASE_LINES[type])) beat('biggering', 'Business is business. And business must grow.');
       story.building = null;
     }
     return;
@@ -227,8 +265,8 @@ function updatePlayer(dt) {
     player.x += (dir.x * forward - dir.z * strafe) * speed * dt;
     player.z += (dir.z * forward + dir.x * strafe) * speed * dt;
   }
-  // The valley is all there is.
-  const out = Math.hypot(player.x, player.z), limit = FOREST_RADIUS + 20;
+  // The valley floor is yours. The ridge is not.
+  const out = Math.hypot(player.x, player.z), limit = FOREST_RADIUS + 7;
   if (out > limit) { player.x *= limit / out; player.z *= limit / out; }
 
   const ground = groundHeight(player.x, player.z);
@@ -248,15 +286,17 @@ function updatePlayer(dt) {
 }
 
 const hudEl = document.getElementById('hud'), buildEl = document.getElementById('build');
+const shown = {};
+const show = (el, key, html) => { if (shown[key] !== html) { shown[key] = html; el.innerHTML = html; } };
 
 function updateHud() {
   const left = world.trees.length - story.felled;
-  hudEl.innerHTML = `<b>${stock.thneeds}</b> Thneeds<br>${stock.tufts} tufts<br>${left} Truffula Trees<br>${swans.count()} Swomee-Swans`;
-  buildEl.innerHTML = Object.entries(BLUEPRINTS).map(([type, bp]) => {
-    const cost = Object.entries(bp.cost).map(([res, n]) => `${n} ${res}`).join(', ');
+  show(moneyEl, 'money', dollars(stock.money));
+  show(hudEl, 'hud', `${stock.thneeds} Thneeds to sell<br>${stock.tufts} tufts to knit<br>${left} Truffula Trees`);
+  show(buildEl, 'build', Object.entries(BLUEPRINTS).map(([type, bp]) => {
     const cls = story.building === type ? 'sel' : factory.canAfford(type) ? '' : 'off';
-    return `<div class="${cls}">[${bp.key}] ${bp.name}: ${cost} (${bp.blurb})</div>`;
-  }).join('') + (story.building ? '<div class="sel">Click to place · Q to cancel</div>' : '');
+    return `<div class="${cls}">[${bp.key}] ${bp.name} · $${factory.price(type)} · ${bp.blurb}</div>`;
+  }).join('') + (story.building ? '<div class="sel">Click to place · Q to cancel</div>' : ''));
 }
 
 let time = 0;
@@ -275,9 +315,9 @@ function step(dt) {
     loots.update(dt, time, story.ruin, player);
     checkBeats();
   } else {
-    // Title screen: a slow turn around the valley.
+    // Title screen: a slow look around the valley.
     camera.position.set(0, groundHeight(0, 0) + EYE_HEIGHT, 0);
-    camera.rotation.set(0.05, time * 0.08, 0);
+    camera.rotation.set(0.08, player.yaw + 1.6 + Math.sin(time * 0.15) * 0.5, 0);
     loots.update(dt, time, 0, player);
   }
 
@@ -285,7 +325,8 @@ function step(dt) {
   world.update(dt);
   swans.update(dt, time, story.ruin);
   butterflies.update(time, story.ruin);
-  watcher.update(dt, player, viewDirection(), story.ruin);
+  fish.update(dt, story.ruin);
+  lorax.update(dt, player, viewDirection(), story.ruin);
   factory.update(dt);
   audio.update(dt, story.ruin);
   updateCaptions(dt);
@@ -298,9 +339,9 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 
-// For poking at the game from the console.
+// For poking at the game from the console and from the scenario test.
 window.game = {
-  story, stock, player, world, watcher, factory, loots, scene, step, primaryAction,
+  story, stock, player, world, lorax, factory, loots, scene, camera, step, primaryAction,
   render: () => renderer.render(scene, camera),
   fell: (tree) => { fellTree(tree, player.x, player.z); onTreeFelled(); },
 };

@@ -86,6 +86,26 @@ export function createAudio() {
     src.stop(ctx.currentTime + seconds);
   }
 
+  function bell(freq, delay, seconds, volume) {
+    const osc = ctx.createOscillator(), gain = ctx.createGain(), t = ctx.currentTime + delay;
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(volume, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + seconds);
+    osc.connect(gain).connect(master);
+    osc.start(t);
+    osc.stop(t + seconds);
+  }
+
+  // Cash register: the drawer clunks ("ka"), then the bell ("ching").
+  function kaChing(volume = 0.2) {
+    if (!ctx) return;
+    noiseHit(2600, 0.06, 0.5);
+    bell(2093, 0.07, 0.7, volume);
+    bell(3136, 0.07, 0.5, volume * 0.7);
+    bell(4186, 0.09, 0.4, volume * 0.4);
+  }
+
   function update(dt, ruin) {
     if (!ctx) return;
     padThird.frequency.value = lerp(277.18, 255, ruin); // major -> flat of minor
@@ -105,6 +125,8 @@ export function createAudio() {
     start, update,
     chop: () => noiseHit(900, 0.12, 0.8),
     crash: () => noiseHit(220, 0.9, 0.9),
-    clank: () => noiseHit(2400, 0.3, 0.5),
+    kaChing,
+    // Spending is a heavier drawer and a bigger bell.
+    purchase() { noiseHit(500, 0.25, 0.9); kaChing(0.3); if (ctx) bell(1046, 0.2, 1.2, 0.2); },
   };
 }
