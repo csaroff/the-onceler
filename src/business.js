@@ -7,7 +7,7 @@ import { height, dist, rand, roadPoint, roadDistance, SHOP, FACTORY, TOWN, ROAD_
 import { PALETTE } from './toon.js';
 
 export const PRICE = 3.98;
-const KNIT_SECONDS = 3.5, HAND_TUFTS = 4, HACKER_TUFTS = 8, WAGON_LOAD = 24;
+const KNIT_SECONDS = 3.5, HAND_TUFTS = 4, HACKER_TUFTS = 8, HACKER_REST = 18, WAGON_LOAD = 24;
 const FACTORY_PRICES = [250, 800, 2400, 6000];
 const FACTORY_RATE = [0, 0.5, 1.2, 3, 7];     // Thneeds a second, by factory level
 const THNEEDS_PER_TUFT = [1, 1, 2, 3, 4];     // a biggered factory knits thinner Thneeds
@@ -242,7 +242,7 @@ export function createBusiness(g) {
     }
     if (id === 'hacker') {
       const model = place(works.build({ kind: 'hacker' }), SHOP.x - 12 - hackers.length * 5, SHOP.z - 12);
-      hackers.push({ model, x: model.position.x, z: model.position.z, state: 'seek', timer: 0, smoke: 0, unit: unit('hacker', 'Super-Axe-Hacker', model, 2.5, 14, 350) });
+      hackers.push({ model, x: model.position.x, z: model.position.z, state: 'seek', timer: 0, rest: 0, smoke: 0, unit: unit('hacker', 'Super-Axe-Hacker', model, 2.5, 14, 350) });
       g.story.flag('hacker', 'hacker');
     }
     return true;
@@ -312,12 +312,14 @@ export function createBusiness(g) {
       if (u.broken) continue;
       const near = (t) => dist(t.x, t.z, h.x, h.z);
       if (h.state === 'seek') {
+        // After a smack it stands and gets steam up again, so one hacker takes most of an hour to clear the valley.
+        if (h.rest > 0) { h.rest -= dt; works.pose(h.model, 'run', g.time, 0.15); smoke(h.model, dt, h, 0.8, 0.5); continue; }
         works.pose(h.model, 'run', g.time, 0.3);
         if (!standing.length) continue;
         const target = standing.reduce((a, b) => (near(a) < near(b) ? a : b));
         const dx = target.x - h.x, dz = target.z - h.z, d = Math.hypot(dx, dz);
         if (d < 5) { h.state = 'whack'; h.timer = 0; continue; }
-        h.x += (dx / d) * 8 * dt; h.z += (dz / d) * 8 * dt;
+        h.x += (dx / d) * 6 * dt; h.z += (dz / d) * 6 * dt;
         h.model.position.set(h.x, height(h.x, h.z), h.z);
         h.model.rotation.y = Math.atan2(dx, dz);
         u.x = h.x; u.z = h.z;
@@ -325,12 +327,13 @@ export function createBusiness(g) {
       } else {
         h.timer += dt;
         works.pose(h.model, 'run', g.time, 1);
-        if (h.timer < 1.4) continue;
+        if (h.timer < 2) continue;
         for (const tree of standing.filter((t) => near(t) < 13).sort((a, b) => near(a) - near(b)).slice(0, 4)) {
           tree.byMachine = true;
           g.world.fell(tree, h.x, h.z);
         }
         h.state = 'seek';
+        h.rest = HACKER_REST;
       }
     }
   }

@@ -42,5 +42,7 @@ Every line of dialogue is from the book and lives in `src/quotes.js`.
 
     npm run dev -- --port 5199
     npm test                                  # plays a whole game headless, writes tests/shots/
+    node tests/real-input.mjs                 # real clock and real key events
     node tools/shot.mjs lorax idle@0/25/8     # contact sheet of one model, to tools/out/
+    node tools/pacing.mjs 60                  # a bot plays honestly and reports when each milestone lands
     node tools/peek.mjs out.png "game.player.x = 30"   # boot, run a snippet, save a picture

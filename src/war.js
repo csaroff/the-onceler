@@ -13,7 +13,7 @@ const AXE_DAMAGE = 2, SLING_DAMAGE = 1;
 const KINDS = {
   loot: { art: barbaloot, opts: { variant: 'feral' }, hp: 3, speed: 5.2, dmg: 1, reach: 1.7, cooldown: 1.3, size: 0.6, gait: 'run' },
   lobber: { art: barbaloot, opts: { variant: 'feral' }, hp: 2, speed: 4.6, dmg: 1, range: 17, cooldown: 2.8, size: 0.6, gait: 'run', shot: 'fruit', attack: 'throw' },
-  swan: { art: swanArt, opts: { variant: 'smogged' }, hp: 2, speed: 10, dmg: 1.5, size: 0.9, flies: 9, gait: 'fly' },
+  swan: { art: swanArt, opts: { variant: 'smogged' }, hp: 2, speed: 10, dmg: 1, size: 0.9, flies: 9, gait: 'fly' },
   fish: { art: fishArt, opts: { variant: 'gummed' }, hp: 6, speed: 2.7, dmg: 1.5, range: 16, cooldown: 3, size: 0.7, gait: 'walk', shot: 'glob' },
   stumper: { art: horrors, opts: { kind: 'stumper' }, hp: 4, speed: 6.5, dmg: 2, reach: 2, cooldown: 1.2, size: 0.9, gait: 'walk' },
   glupp: { art: horrors, opts: { kind: 'glupp' }, hp: 16, speed: 2.2, dmg: 4, reach: 2.6, cooldown: 2, size: 1.3, gait: 'walk' },
@@ -209,7 +209,10 @@ export function createWar(g) {
       const d = moveToward(e, at.x, at.z, def.speed, dt);
       e.y += (ground + def.flies + Math.sin(g.time * 1.3 + e.phase) - e.y) * Math.min(1, dt * 2);
       pose(e, 'fly', g.time + e.phase, 0);
-      if (d < 22) {
+      // Only two may dive at once; the rest fly on past and come round again.
+      const diving = enemies.filter((o) => o.state === 'dive').length;
+      if (d < 22 && diving >= 2 && !def.boss) { e.state = 'climb'; e.timer = 0; }
+      else if (d < 22) {
         e.state = 'dive'; e.timer = 0;
         Object.assign(e.from, { x: e.x, y: e.y, z: e.z });
         // Pull up just short of the target, not inside it.
@@ -218,7 +221,7 @@ export function createWar(g) {
       }
     } else if (e.state === 'dive') {
       // It commits to where you were when it started. Step aside.
-      e.timer += dt / 1.15;
+      e.timer += dt / 1.5; // slow enough to see coming and step aside
       const t = Math.min(1, e.timer), ease = t * t;
       e.x = e.from.x + (e.aim.x - e.from.x) * ease; e.y = e.from.y + (e.aim.y - e.from.y) * ease; e.z = e.from.z + (e.aim.z - e.from.z) * ease;
       pose(e, 'dive', t);
