@@ -15,7 +15,7 @@ export const QUOTES = {
     [ONCELER, 'Now, chopping one tree at a time was too slow.'],
     [ONCELER, 'So I quickly invented my Super-Axe-Hacker which whacked off four Truffula Trees at one smacker.'],
   ],
-  wagon: [[ONCELER, 'I biggered my wagons. I biggered the loads.']],
+  wagon: [[ONCELER, 'I biggered my wagons. I biggered the loads of the Thneeds I shipped out.']],
   road: [[ONCELER, 'I biggered my roads.']],
   biggerFactory: [[ONCELER, 'I biggered my factory.']],
   biggest: [[ONCELER, 'I biggered my money, which everyone needs.']],
@@ -40,7 +40,7 @@ export const QUOTES = {
   lastTree: [[ONCELER, 'The very last Truffula Tree of them all!']],
   lift: [
     [ONCELER, 'The Lorax said nothing. Just gave me a glance.'],
-    [ONCELER, 'He lifted himself by the seat of his pants.'],
+    [ONCELER, '…as he lifted himself by the seat of his pants.'],
   ],
   unless: [[LORAX, 'UNLESS']],
   seed: [

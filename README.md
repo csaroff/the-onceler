@@ -1,39 +1,45 @@
 # The Once-ler
 
-A first-person game set in the Truffula valley. It starts beautiful. You have an axe, and Thneeds sell for $3.98.
+A first-person game set in the world of The Lorax. It starts beautiful. You have an axe, and Thneeds sell for $3.98.
 
     npm install
     npm run dev        # then open the printed URL
 
-Controls: WASD move, Shift run, Space jump, click to chop, 1 / 2 / 3 to buy, Q to cancel.
+Controls: WASD move, Shift run, Space jump, click to swing the axe, right-click or F for the sling, E to use,
+B for the business menu, V for defences, Q to close a menu.
 
-## What is in the game
+## How it plays
 
-The current slice is the fall from paradise. One number, `ruin` (the share of trees felled), drives the sky,
-smog, grass, water, birdsong, music and the animals.
+1. Chop a Truffula Tree. Its tufts fall where the tree lands; walk over them to pick them up.
+2. Carry them back to the shop and knit them into Thneeds on the stool, by hand.
+3. Carry the Thneeds east along the road to town and sell them at your stall. The town only wants so many at a time.
+4. Spend the money: a handcart, relatives to knit, a factory (in four sizes), wagons that sell for you, and
+   Super-Axe-Hackers that fell four trees at a time.
 
-- Chop Truffula Trees for tufts. Your cart knits them into Thneeds and sells them, slowly.
-- Money buys machines, and each one costs more than the last:
-  - Thneed Factory: knits fast.
-  - Thneed Wagon: ships Thneeds out of the valley ten at a time.
-  - Super-Axe-Hacker: drives itself from tree to tree and whacks four at one smacker.
-- Bar-ba-loots climb the trees, sit in the tufts, eat Truffula Fruit and play tag, until there is not enough forest left.
-- The Lorax is not there until the first tree falls. Then he stands on the ridge, enormous, and stays there.
-  You cannot climb the ridge, and if you get near he goes down behind it and comes up somewhere else.
-  The more you cut, the more shapes gather on the ridge beside him.
-- With half the forest gone, he marches the Bar-ba-loots out in a cutscene.
+The Lorax comes out of the first stump, once, up close. After that he is only ever a small figure a long way off,
+with a horn call, for a few seconds. About a minute later the wildlife arrives from where he stood.
+
+- Waves grow, and change as the land is ruined: Bar-ba-loots, then Swomee-Swans, then Humming-Fish, then worse.
+- After every third wave a lieutenant waits in no-man's-land, north-west of the shop, for you to come alone.
+  Beat it and its kind is sent away for good, which you are made to watch, and it is quiet for a while.
+- Defences are walls, hedges and the guns of The Butter Battle Book.
+- Being knocked out costs a quarter of your money.
+- The last tree ends it, more or less as the book does.
+
+Every line of dialogue is from the book and lives in `src/quotes.js`.
 
 ## Layout
 
-- `src/main.js`: game loop, player, money, story beats, the march cutscene
-- `src/toon.js`: the drawing style (flat colour, ink outlines, curly shapes)
-- `src/world.js`: terrain, trees, sky, and how they decay
-- `src/creatures.js`: swans, butterflies, Humming-Fish, Bar-ba-loots, the Lorax
-- `src/factory.js`: the cart, the machines, prices and sales
-- `src/audio.js`: synthesised sound, including the cash register
+- `src/main.js`: the loop, input, goals and the ending
+- `src/terrain.js`: the map (groves, town, road, hills) and the height of the ground
+- `src/world.js`: ground, sky, plants and trees, and how they decay
+- `src/player.js`, `src/business.js`, `src/wildlife.js`, `src/war.js`, `src/lorax.js`, `src/defences.js`, `src/scenes.js`
+- `src/art/`: one file per subject; every model is built in code. `docs/ART.md` is the brief.
+- `src/ink.js`, `src/toon.js`: the drawing style (flat colour, pen outline)
 
-## Test
+## Tools
 
     npm run dev -- --port 5199
-    CHROME_PATH=/path/to/chrome npm test          # plays the whole arc, writes tests/shots/
-    CHROME_PATH=/path/to/chrome node tests/gallery.mjs   # close-ups of the cast and machines
+    npm test                                  # plays a whole game headless, writes tests/shots/
+    node tools/shot.mjs lorax idle@0/25/8     # contact sheet of one model, to tools/out/
+    node tools/peek.mjs out.png "game.player.x = 30"   # boot, run a snippet, save a picture

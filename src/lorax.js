@@ -68,6 +68,7 @@ export function createLorax(g) {
     const bearing = Math.atan2(at.x - p.x, at.z - p.z) - Math.atan2(p.facing().x, p.facing().z);
     g.audio.omen(-Math.sin(bearing));
     g.ui.omen();
+    if (lorax.sightings === 1) g.ui.tip('You are being watched, from a long way off.', 6);
     return at;
   };
 
