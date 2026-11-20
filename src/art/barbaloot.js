@@ -346,7 +346,9 @@ export function build({ variant = 'happy', kind, trunk = false, stump = false } 
     hp.add(new THREE.Mesh(R ? k.thighR : k.thighL, fm));
     const kn = new THREE.Group(); kn.position.y = -THIGH; hp.add(kn);
     kn.add(new THREE.Mesh(R ? k.shinR : k.shinL, fm));
-    legs.push({ hp, kn });
+    // Heel and toe-tip markers, so standing poses can keep the soles on the ground.
+    const marks = [[0, -SHIN - 0.09, -0.08], [0, -SHIN - 0.08, 0.2]].map((at) => { const o = new THREE.Object3D(); o.position.set(...at); kn.add(o); return o; });
+    legs.push({ hp, kn, marks });
   }
   // Things held in the paws.
   const [left, right] = arms;
@@ -470,7 +472,7 @@ const POSES = {
     s.a[1] = [mix(-0.2, -2.6, up) + 2.4 * hit * (1 - back), mix(0.2, 0.6, k) - 1.0 * hit * (1 - back), -0.4 * k, 0];
     s.a[0] = [-0.6 * k, 0.5 * k + 0.2, -0.8 * k, 0];
     s.l[0] = [0.25 * k, 0.15, 0.2 * k]; s.l[1] = [-0.35 * k, 0.15, 0.4 * k];
-    s.oh = hit > 0 && back < 0.5; s.lid = 0.2;
+    s.oh = rig.cfg.mood !== 'angry' && hit > 0 && back < 0.5; s.lid = 0.2; // ferals keep snarling
   },
   throw(s, t) {
     // Overarm: the right arm cocks back over the head, whips forward and lets go at t = 0.5.
@@ -495,6 +497,7 @@ const POSES = {
     const fall = Math.pow(smooth(0, 0.6, t), 1.6), bump = Math.sin(smooth(0.6, 0.8, t) * Math.PI) * 0.06;
     s.pivot = [0, 0, -0.27];
     s.rx = -Math.PI / 2 * fall + bump;
+    s.y = 0.06 * fall;
     s.l[0] = [-1.5 * fall, 0.3 * fall, 0.3 * fall]; s.l[1] = [-1.5 * fall, 0.3 * fall, 0.3 * fall];
     s.a[0] = [-0.6 * fall, 0.2 + 1.1 * fall, -0.2, 0]; s.a[1] = [-0.6 * fall, 0.2 + 1.1 * fall, -0.2, 0];
     s.hx = -0.25 * fall; s.oh = t > 0.08; s.lid = t < 0.6 ? -0.3 : 1;
@@ -550,6 +553,9 @@ function flavour(s, name, rig) {
   }
 }
 
+const STANDING = new Set(['idle', 'walk', 'run', 'march', 'attack', 'throw', 'hurt']);
+const tmp = new THREE.Vector3(), inv = new THREE.Matrix4();
+
 export function pose(model, name, t = 0, amount = 0) {
   const rig = model.userData.rig;
   if (!rig) return;
@@ -580,6 +586,14 @@ export function pose(model, name, t = 0, amount = 0) {
     leg.hp.rotation.set(hip, 0, out * side, 'XZY');
     leg.kn.rotation.set(knee, 0, 0);
   });
+
+  // Standing poses: if a crouch has pushed a heel or toe below the ground, lift the whole body.
+  if (STANDING.has(name)) {
+    rig.scaler.updateMatrixWorld(true);
+    let low = Infinity;
+    for (const leg of rig.legs) for (const o of leg.marks) low = Math.min(low, o.getWorldPosition(tmp).applyMatrix4(inv.copy(rig.scaler.matrixWorld).invert()).y);
+    if (low < 0) m.position.y -= low;
+  }
 
   // Blink every few seconds unless the pose sets the lids.
   let lid = s.lid ?? cfg.lid;

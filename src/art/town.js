@@ -464,7 +464,7 @@ function lerkimSketch() {
   // Rope from the pulley straight down, and the bucket on the end of it.
   const [px, py, pz] = bendAt(RW / 2 + 1.45 + 0.33, beamY - 0.3, 0.9);
   const bucketY = 3.2; // dangling at head height, so it is easy to see
-  sk.add(pipe([[px, py, pz], [px, (py + bucketY) / 2, pz], [px, bucketY + 0.4, pz]], 0.045, 4, 5), '#e8d7a8');
+  sk.add(pipe([[px, py, pz], [px, (py + bucketY) / 2, pz], [px, bucketY + 0.08, pz]], 0.06, 4, 5), "#e8d7a8");
   bucket(sk, px, bucketY - 0.05 - 0.45 * 1.8, pz, 1.8);
   return sk;
 }
@@ -611,6 +611,35 @@ function wellSketch(sk) {
 
 // ---------------------------------------------------------------- signpost
 
+// Lettering that always fits: like signTexture, but the type shrinks until the longest line fits the board, with
+// a margin, and the letters are drawn a little wobbly, as if painted by hand.
+function boardTexture(lines, width, height, background = PALETTE.paper) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  const g = canvas.getContext('2d');
+  g.fillStyle = background;
+  g.fillRect(0, 0, width, height);
+  g.fillStyle = PALETTE.ink;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  let size = (height / lines.length) * 0.72;
+  g.font = `bold ${size}px Georgia`;
+  const widest = Math.max(...lines.map((l) => g.measureText(l).width));
+  size = min(size, size * (width * 0.9) / widest);
+  g.font = `bold ${size}px Georgia`;
+  lines.forEach((line, i) => {
+    g.save();
+    g.translate(width / 2, (height / lines.length) * (i + 0.5));
+    g.rotate(0.015 * sin(i * 3.1 + line.length));
+    g.fillText(line, 0, 0);
+    g.restore();
+  });
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 function signpost(lines) {
   const g = new THREE.Group();
   const sk = new Sketch();
@@ -620,7 +649,7 @@ function signpost(lines) {
   const r = seeded(lines.join('').length + 3);
   lines.forEach((line, i) => {
     const dir = i % 2 ? -1 : 1;
-    const len = THREE.MathUtils.clamp(0.13 * line.length + 0.5, 1.1, 3.4), h = 0.46;
+    const len = THREE.MathUtils.clamp(0.12 * line.length + 0.75, 1.3, 3.6), h = 0.5;
     const s = new THREE.Shape();
     // An arrow-shaped board, the point on the far end.
     s.moveTo(-0.12, -h / 2); s.lineTo(len - 0.3, -h / 2 - 0.03); s.lineTo(len, 0.02); s.lineTo(len - 0.28, h / 2 + 0.03); s.lineTo(-0.12, h / 2); s.lineTo(-0.12, -h / 2);
@@ -629,11 +658,13 @@ function signpost(lines) {
     const board = new THREE.ExtrudeGeometry(s, { depth: 0.08, bevelEnabled: false }).translate(0, 0, -0.04);
     sk.add(put(board, x, y, 0, 0, ry, rz), PALETTE.paper);
     // The lettering, on both faces.
-    const tex = signTexture([` ${line} `], { width: 1024, height: Math.round(1024 * h / (len - 0.35)), background: PALETTE.paper });
+    // The lettered plate runs from just past the post to the start of the point.
+    const from = 0.14, to = len - 0.3, plateW = to - from;
+    const tex = boardTexture([line], 1024, Math.round(1024 * (h - 0.06) / plateW));
     const mat = flat('#ffffff', { map: tex });
     for (const face of [1, -1]) {
-      const plate = new THREE.Mesh(new THREE.PlaneGeometry(len - 0.4, h - 0.04), mat);
-      plate.position.set((len - 0.4) / 2 - 0.05, 0, face * 0.045);
+      const plate = new THREE.Mesh(new THREE.PlaneGeometry(plateW, h - 0.06), mat);
+      plate.position.set(face > 0 ? (from + to) / 2 : (from + to) / 2, 0, face * 0.045);
       plate.rotation.y = face > 0 ? 0 : PI;
       const holder = new THREE.Group();
       holder.position.set(x, y, 0);
@@ -921,7 +952,7 @@ export function build({ kind = 'house', seed = 1, lines = ['TOWN'] } = {}) {
     g = meshes(cached('stall', stallSketch));
     // The sign over the front of the awning.
     const sign = new THREE.Group();
-    sign.add(new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.95), flat('#ffffff', { map: signTexture([' THNEEDS ', '$3.98'], { width: 1024, height: 486, background: PALETTE.paper }) })));
+    sign.add(new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.95), flat('#ffffff', { map: boardTexture(['THNEEDS', '$3.98'], 1024, 486) })));
     sign.children[0].position.z = 0.05;
     meshes(cached('stallSign', (sk) => {
       sk.add(new THREE.BoxGeometry(2.25, 1.15, 0.08, 4, 1, 1).translate(0, 0, 0), PALETTE.thneedPink);

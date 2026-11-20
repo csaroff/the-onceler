@@ -430,7 +430,7 @@ function seam(k, x, rand) {
   const flat = (k / WALL_ROWS) * 2.2;
   const middle = Math.cos((x / 2) * Math.PI * 0.5); // 0 at the ends, 1 in the middle
   const wob = k === WALL_ROWS
-    ? -0.14 + 0.11 * Math.sin(x * 1.5 + rand.a) + 0.05 * Math.sin(x * 3.7 + rand.b) // dips below 2.2, never above
+    ? -0.2 + 0.11 * Math.sin(x * 1.5 + rand.a) + 0.05 * Math.sin(x * 3.7 + rand.b) // dips below 2.2, never above
     : 0.07 * Math.sin(x * 1.9 + rand.a) + 0.03 * Math.sin(x * 3.3 + k * 2.1 + rand.b); // rows sag together
   return flat + wob * middle;
 }
@@ -497,7 +497,7 @@ function buildWall({ seed = 1, gate = false } = {}) {
   }
   // Fallen stones, shown only when the wall is broken.
   const rubble = new Sketch();
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < (gate ? 3 : 5); i++) {
     rubble.add(r() < 0.5 ? C.stone : C.stone2, rockGeo, { p: [-1.6 + i * 0.8 + r(-0.2, 0.2), 0.12, 0.45 + r(0, 0.3)], r: [r(0, 3), r(0, 3), 0], s: [r(0.22, 0.3), 0.16, r(0.18, 0.25)] });
   }
   const model = new THREE.Group().add(s.group('stones'), rubble.group('rubble'));
@@ -574,7 +574,11 @@ function buildHedge({ seed = 1 } = {}) {
   const arches = 6;
   for (let i = 0; i < arches; i++) {
     const x0 = -1.95 + (i * 3.9) / (arches - 1) + r(-0.08, 0.08);
-    const span = r(0.8, 1.2) * (x0 < 0 ? 1 : -1) * (i % 3 === 0 ? -1 : 1);
+    // Arches lean alternately left and right, but always back toward the middle at the two ends.
+    let dir = i % 2 ? 1 : -1;
+    if (x0 - 1 < -2) dir = 1;
+    if (x0 + 1 > 2) dir = -1;
+    const span = r(0.8, 1.2) * dir;
     const xa = Math.max(-1.95, Math.min(1.95, x0)), xb = Math.max(-1.95, Math.min(1.95, x0 + span));
     const h = r(0.85, 1.05), z = r(-0.22, 0.22);
     const pts = [[xa, 0.02, z], [xa + (xb - xa) * 0.15, h * 0.75, z * 0.6], [xa + (xb - xa) * 0.5, h, -z * 0.4], [xa + (xb - xa) * 0.85, h * 0.7, -z], [xb, 0.02, -z * 0.8]];

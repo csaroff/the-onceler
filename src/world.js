@@ -145,17 +145,20 @@ export function createWorld(scene, hooks) {
 
   // --- Truffula Trees
   const trees = [], total = GROVES.reduce((n, g) => n + g.count, 0);
-  const variants = [];
-  for (let v = 0; v < truffula.VARIANTS; v++) {
-    const part = truffula.parts(v);
-    part.tuft.computeBoundingBox();
-    const trunk = new THREE.InstancedMesh(part.trunk, truffula.trunkMaterial(), total);
-    const tuft = new THREE.InstancedMesh(part.tuft, truffula.tuftMaterial(), total);
-    trunk.frustumCulled = tuft.frustumCulled = false;
-    trunk.count = tuft.count = 0;
-    scene.add(trunk, tuft);
-    variants.push({ part, trunk, tuft });
-  }
+  // One batch of trees per grove and shape, so a grove that is off screen is not drawn at all.
+  const variants = GROVES.map((grove) => {
+    const batch = [];
+    for (let v = 0; v < truffula.VARIANTS; v++) {
+      const part = truffula.parts(v);
+      part.tuft.computeBoundingBox();
+      const trunk = new THREE.InstancedMesh(part.trunk, truffula.trunkMaterial(), grove.count);
+      const tuft = new THREE.InstancedMesh(part.tuft, truffula.tuftMaterial(), grove.count);
+      trunk.count = tuft.count = 0;
+      scene.add(trunk, tuft);
+      batch.push({ part, trunk, tuft });
+    }
+    return batch;
+  });
   const stumps = instancer(scene, truffula.build({ kind: 'stump' }), total);
   const tint = new THREE.Color();
   GROVES.forEach((grove, groveIndex) => {
@@ -164,7 +167,7 @@ export function createWorld(scene, hooks) {
       const a = rng(0, 6.28), r = Math.sqrt(rng()) * grove.r, x = grove.x + Math.cos(a) * r, z = grove.z + Math.sin(a) * r;
       if (!isWild(x, z) || trees.some((t) => dist(t.x, t.z, x, z) < 7)) continue;
       if (HILLS.some(([hx, hz]) => dist(x, z, hx, hz) < 20)) continue; // hilltops stay bare, so whoever stands on one can be seen
-      const variant = Math.floor(rng(0, truffula.VARIANTS)), v = variants[variant];
+      const variant = Math.floor(rng(0, truffula.VARIANTS)), v = variants[groveIndex][variant];
       const tree = {
         id: trees.length, grove: groveIndex, x, z, y: height(x, z), variant, rot: rng(0, 6.28), scale: rng(0.85, 1.2),
         color: PALETTE.tufts[Math.floor(rng(0, PALETTE.tufts.length))], hp: 3, state: 'standing', shake: 0, slot: v.trunk.count,
@@ -181,14 +184,16 @@ export function createWorld(scene, hooks) {
     }
   });
 
+  for (const batch of variants) for (const v of batch) { v.trunk.computeBoundingSphere(); v.tuft.computeBoundingSphere(); }
+
   // A point on a standing tree's trunk, 0 at the root to 1 at the tip. Bar-ba-loots climb along this.
   function trunkPoint(tree, u, out) {
-    variants[tree.variant].part.curve(u, out).multiplyScalar(tree.scale).applyAxisAngle(up, tree.rot);
+    variants[tree.grove][tree.variant].part.curve(u, out).multiplyScalar(tree.scale).applyAxisAngle(up, tree.rot);
     return out.set(out.x + tree.x, out.y + tree.y, out.z + tree.z);
   }
   // Where something sitting on top of the tuft should be.
   function perchPoint(tree, out) {
-    const part = variants[tree.variant].part;
+    const part = variants[tree.grove][tree.variant].part;
     out.copy(part.top).multiplyScalar(tree.scale).applyAxisAngle(up, tree.rot);
     return out.set(out.x + tree.x, out.y + tree.y + part.tuft.boundingBox.max.y * tree.scale * 0.75, out.z + tree.z);
   }
@@ -218,7 +223,7 @@ export function createWorld(scene, hooks) {
   // Bring a tree down, tipping away from (fromX, fromZ).
   function fell(tree, fromX, fromZ) {
     if (tree.state !== 'standing') return false;
-    const v = variants[tree.variant];
+    const v = variants[tree.grove][tree.variant];
     v.trunk.setMatrixAt(tree.slot, zero);
     v.tuft.setMatrixAt(tree.slot, zero);
     v.trunk.instanceMatrix.needsUpdate = v.tuft.instanceMatrix.needsUpdate = true;
@@ -271,7 +276,7 @@ export function createWorld(scene, hooks) {
     for (const tree of trees) {
       if (tree.shake <= 0 || tree.state !== 'standing') continue;
       tree.shake = Math.max(0, tree.shake - dt);
-      const v = variants[tree.variant], lean = Math.sin(tree.shake * 45) * 0.05 * (tree.shake / 0.3);
+      const v = variants[tree.grove][tree.variant], lean = Math.sin(tree.shake * 45) * 0.05 * (tree.shake / 0.3);
       q.setFromAxisAngle(up, tree.rot).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), lean));
       v.trunk.setMatrixAt(tree.slot, m.compose(p.set(tree.x, tree.y, tree.z), q, s.setScalar(tree.scale)));
       p.copy(v.part.top).multiplyScalar(tree.scale).applyQuaternion(q).add(new THREE.Vector3(tree.x, tree.y, tree.z));

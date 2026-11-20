@@ -440,18 +440,21 @@ function peak(rand) {
   return [fade(body, C.peak, C.peakTop, 25, T + 30), fade(spire, C.peak, C.peakTop, 25, T + 30)];
 }
 
-// A bare, twisted dead tree: a gnarled trunk with crooked branches that end in small curls.
+// A bare, twisted dead tree: a gnarled, flared trunk with three long, crooked branches that sag and end in curls.
 function deadtree(rand) {
   const parts = [], lean = rand(-0.5, 0.5), twist = rand(0, TAU);
-  const trunk = [[0, 0, 0], [0.25 * Math.cos(twist), 1.3, 0.25 * Math.sin(twist)], [lean, 2.6, -0.1], [lean * 0.6 + 0.3, 3.7, 0.15], [lean * 1.2, 4.6, 0]];
-  parts.push(noodle(trunk, (u) => 0.32 * (1 - u) ** 1.2 + 0.05 + (u < 0.1 ? (0.1 - u) * 2.2 : 0), { sides: 6, segments: 10, tip: true, color: C.dead }));
-  const branches = 4;
+  const trunk = [[0, 0, 0], [0.25 * Math.cos(twist), 1.3, 0.25 * Math.sin(twist)], [lean, 2.6, -0.1], [lean * 0.6 + 0.3, 3.6, 0.15], [lean * 1.3 + 0.2, 4.4, 0], [lean * 1.6 + 0.5, 4.8, 0]];
+  // Fat at the root (a flared foot), thinning to a crooked point.
+  parts.push(noodle(trunk, (u) => 0.3 * (1 - u) ** 1.1 + 0.05 + 0.3 * Math.max(0, 0.12 - u) / 0.12, { sides: 6, segments: 11, tip: true, color: C.dead }));
+  const branches = 3;
   for (let i = 0; i < branches; i++) {
-    const a = twist + (i / branches) * TAU + rand(-0.4, 0.4), y = 1.9 + i * 0.6 + rand(-0.2, 0.2), len = rand(1.0, 1.6) * (1 - i * 0.12);
-    const bx = lean * (y / 4.6), dx = Math.cos(a), dz = Math.sin(a), curl = rand() < 0.5 ? -1 : 1;
-    const pts = [[bx, y, 0], [bx + dx * len * 0.45, y + len * 0.35, dz * len * 0.45], [bx + dx * len * 0.85, y + len * 0.5, dz * len * 0.85],
-      [bx + dx * len * 1.05 - dz * 0.2 * curl, y + len * 0.32, dz * len * 1.05 + dx * 0.2 * curl], [bx + dx * len * 0.9 - dz * 0.25 * curl, y + len * 0.22, dz * len * 0.9 + dx * 0.25 * curl]];
-    parts.push(noodle(pts, (u) => 0.1 * (1 - u) + 0.02, { sides: 5, segments: 6, tip: true, color: i % 2 ? C.deadDark : C.dead }));
+    const a = twist + 1 + (i / branches) * TAU + rand(-0.3, 0.3), y = 2.1 + i * 0.75 + rand(-0.15, 0.15), len = rand(1.4, 1.9) * (1 - i * 0.15);
+    const bx = lean * (y / 3), dx = Math.cos(a), dz = Math.sin(a), curl = rand() < 0.5 ? -1 : 1;
+    // Out and up, then sagging down at the end into a little curl.
+    const pts = [[bx, y, 0], [bx + dx * len * 0.4, y + len * 0.4, dz * len * 0.4], [bx + dx * len * 0.85, y + len * 0.45, dz * len * 0.85],
+      [bx + dx * len * 1.1, y + len * 0.15, dz * len * 1.1], [bx + dx * len * 1.0 - dz * 0.2 * curl, y - len * 0.05, dz * len * 1.0 + dx * 0.2 * curl],
+      [bx + dx * len * 0.88 - dz * 0.1 * curl, y + len * 0.04, dz * len * 0.88 + dx * 0.1 * curl]];
+    parts.push(noodle(pts, (u) => 0.13 * (1 - u) + 0.025, { sides: 5, segments: 9, tip: true, color: C.dead }));
   }
   return parts;
 }
@@ -465,39 +468,30 @@ function smoke(rand) {
   ];
 }
 
-// A splash: a low scalloped crown of water, and a ring of fat teardrops thrown up and out of it.
+// A splash: a low crown of water with rounded points, and a ring of fat round drops thrown up and out of it.
 function splash(rand) {
-  // The crown: a short open cup whose rim rises into points.
-  const n = 10, pos = [], index = [];
+  // The crown: a short open cup whose rim rises into rounded points; drawn on both sides.
+  const n = 12, pos = [], index = [];
   for (let k = 0; k < n; k++) {
-    const a = (k / n) * TAU, r0 = 0.26, r1 = 0.36, h = k % 2 ? 0.1 : rand(0.2, 0.26);
+    const a = (k / n) * TAU, r0 = 0.24, r1 = 0.34, h = 0.13 + 0.11 * Math.max(0, Math.cos((k / n) * TAU * 4)) + rand(0, 0.04);
     pos.push(Math.cos(a) * r0, 0, Math.sin(a) * r0, Math.cos(a) * r1, h, Math.sin(a) * r1);
   }
   for (let k = 0; k < n; k++) {
     const a = k * 2, b = ((k + 1) % n) * 2;
-    index.push(a, a + 1, b, b, a + 1, b + 1);
+    index.push(a, a + 1, b, b, a + 1, b + 1, a, b, a + 1, b, b + 1, a + 1);
   }
   const crown = new THREE.BufferGeometry();
   crown.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   crown.setIndex(index);
   crown.computeVertexNormals();
   const parts = [paint(crown, C.splash)];
-  const drops = 5;
-  for (let i = 0; i < drops; i++) {
-    const a = (i / drops) * TAU + rand(-0.3, 0.3), h = rand(0.45, 0.8), d = rand(0.38, 0.5);
-    const drop = weld(new THREE.SphereGeometry(1, 4, 3));
-    const q = drop.attributes.position;
-    for (let k = 0; k < q.count; k++) {
-      const y = q.getY(k), taper = y > 0 ? 1 - y * 0.9 : 1;      // a teardrop: round below, pointed above
-      q.setXYZ(k, q.getX(k) * 0.09 * taper, y * 0.15, q.getZ(k) * 0.09 * taper);
-    }
+  // Four drops, each a round blob, one smaller than the rest.
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * TAU + rand(-0.4, 0.4), h = rand(0.45, 0.75), d = rand(0.3, 0.45), r = i === 3 ? 0.055 : 0.075;
+    const drop = weld(new THREE.SphereGeometry(r, 5, 3));
+    drop.scale(1, 1.25, 1);
     drop.computeVertexNormals();
-    paint(drop, C.splash);
-    const out = V(Math.cos(a), 0, Math.sin(a));
-    // Each drop's tail points back toward the middle, as if flying outward.
-    drop.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), V(-out.x * 0.8, 1, -out.z * 0.8).normalize()));
-    drop.translate(out.x * d, h, out.z * d);
-    parts.push(drop);
+    parts.push(paint(drop.translate(Math.cos(a) * d, h, Math.sin(a) * d), C.splash));
   }
   return parts;
 }

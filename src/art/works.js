@@ -125,7 +125,7 @@ function wheelGeo(r, { rim = C.brass, spoke = C.red, spokes = 5, cheap = false }
   const key = [r, rim, spoke, spokes, cheap].join();
   if (wheelCache.has(key)) return wheelCache.get(key);
   const k = new Kit(), tr = Math.max(0.05, r * 0.13);
-  k.add(new THREE.TorusGeometry(r - tr, tr, cheap ? 4 : 4, cheap ? 12 : 14), rim, at(0, 0, 0, 0, Math.PI / 2));
+  k.add(new THREE.TorusGeometry(r - tr, tr, cheap ? 3 : 4, cheap ? 12 : 14), rim, at(0, 0, 0, 0, Math.PI / 2));
   k.add(new THREE.CylinderGeometry(r * 0.22, r * 0.26, tr * 3.2, 6), spoke, at(0, 0, 0, 0, 0, Math.PI / 2));
   for (let i = 0; i < spokes; i++) {
     k.add(new THREE.BoxGeometry(tr * 0.7, r - tr, tr * 0.9).translate(0, (r - tr) / 2, 0), spoke, at(0, 0, 0, (i / spokes) * Math.PI * 2));
@@ -184,7 +184,7 @@ function thneedGeo(seed = 1) {
   for (const z of [-0.06, 0.06]) k.add(slab(W * 0.93, 0.07, 0.05, { wob: 0.006, seg: 1 }), row, at(0.015, 0.05, z));
   k.add(slab(W * 0.98, 0.08, 0.06, { wob: 0.006, seg: 1 }), cuff, at(0.0, 0.0, D * 0.45));
   // The collar: a fat ring lying on the top layer near the back.
-  k.add(new THREE.TorusGeometry(0.06, 0.03, 3, 8), cuff, at(0.0, 0.115, -D * 0.25, -Math.PI / 2, 0, 0, 1.4, 1, 1));
+  k.add(new THREE.TorusGeometry(0.06, 0.03, 3, 6), cuff, at(0.0, 0.115, -D * 0.25, -Math.PI / 2, 0, 0, 1.4, 1, 1));
   // Two sleeves folded across the front in an X.
   for (const s of [-1, 1]) k.add(tube([[s * W * 0.42, 0.11, -D * 0.2], [s * 0.04, 0.14, 0.02], [-s * W * 0.36, 0.12, D * 0.32]], 0.04, { seg: 2, sides: 5 }), row);
   // Extra sleeves, too many, flopping off the sides onto the ground, each with a darker ribbed cuff.
@@ -375,7 +375,7 @@ function buildCrate(g) {
   // A stencilled label on the front and the side.
   labelMaterial ||= flat('#ffffff', { map: signTexture(['THNEEDS'], { width: 512, height: 150, background: C.paper }) });
   [[0, 0.3, 0.305, 0], [0.365, 0.3, 0, Math.PI / 2]].forEach(([x, y, z, ry]) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.15), labelMaterial);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.13), labelMaterial);
     m.applyMatrix4(k.frame.clone().multiply(at(x, y, z, 0, ry, 0)));
     g.add(m);
   });
@@ -394,8 +394,8 @@ function buildPile(g, level) {
 function buildHandcart(g, A) {
   const k = new Kit();
   // Two wheels of different sizes on a bent axle.
-  addWheel(g, A, 0.38, 0.58, 0.38, 0.25, { spokes: 4, cheap: true });
-  addWheel(g, A, 0.33, -0.56, 0.33, 0.25, { spokes: 4, cheap: true, phase: 1 });
+  addWheel(g, A, 0.38, 0.58, 0.38, 0.25, { spokes: 3, cheap: true });
+  addWheel(g, A, 0.33, -0.56, 0.33, 0.25, { spokes: 3, cheap: true, phase: 1 });
   k.add(tube([[-0.6, 0.33, 0.25], [0, 0.42, 0.25], [0.6, 0.38, 0.25]], 0.04, { seg: 2, sides: 5 }), C.soot);
   // The tub: a deep wooden barrow, wider at the top, nose down toward the front.
   const tub = at(0, 0.38, 0.05, -0.08, 0, 0.03);
@@ -414,7 +414,7 @@ function buildHandcart(g, A) {
   const load = new THREE.Group();
   load.applyMatrix4(tub);
   g.add(load);
-  g.userData.setLoad = loadable(load, heapSpots(5, [[0, -0.22], [0.02, 0.24]], 0.4, 4, 0.12), { seed: 3 });
+  g.userData.setLoad = loadable(load, heapSpots(4, [[0, -0.22], [0.02, 0.24]], 0.4, 4, 0.12), { seed: 3 });
   g.userData.anchors = { handles: V(0, 0, -1.6) };
 }
 
@@ -523,8 +523,8 @@ function noodleArm(parent, r) {
 function buildKnitter(g, A) {
   const k = new Kit();
   // Basket of tufts on the left, a chute of finished pink Thneeds on the right (those stay put on the ground).
-  k.add(drum([[0.22, 0], [0.34, 0.15], [0.38, 0.38], [0.3, 0.38], [0.01, 0.08]], { seed: 4, segs: 9, lean: 0.05 }), C.woodDark, at(-1.0, 0, 0.35));
-  for (let i = 0; i < 5; i++) k.add(sphere(5, 3), P.tufts[i % 5], at(-1.0 + Math.cos(i * 2.1) * 0.17, 0.4 + (i % 3) * 0.06, 0.35 + Math.sin(i * 2.1) * 0.17, 0, i, 0, 0.17, 0.13, 0.17));
+  k.add(drum([[0.22, 0], [0.34, 0.15], [0.38, 0.38], [0.3, 0.38], [0.01, 0.08]], { seed: 4, segs: 8, lean: 0.05 }), C.woodDark, at(-1.0, 0, 0.35));
+  for (let i = 0; i < 4; i++) k.add(sphere(5, 3), P.tufts[i % 5], at(-1.0 + Math.cos(i * 2.1) * 0.17, 0.4 + (i % 3) * 0.06, 0.35 + Math.sin(i * 2.1) * 0.17, 0, i, 0, 0.17, 0.13, 0.17));
   // The chute: a crooked open wooden trough on a stilt, sloping down from the needles to a heap of Thneeds.
   const chute = at(0.85, 0.62, 0.95, 0, -0.35, -0.55);
   k.add(slab(0.85, 0.06, 0.4, { seg: 2, wob: 0.015, sag: -0.03 }), C.wood, chute);
@@ -540,7 +540,7 @@ function buildKnitter(g, A) {
   g.add(rock);
   const r = new Kit();
   // Two curved rockers.
-  for (const s of [-1, 1]) r.add(tube([[s * 0.42, 0.27, -0.75], [s * 0.42, 0.075, -0.3], [s * 0.42, 0.065, 0.3], [s * 0.42, 0.24, 0.85]], 0.06, { seg: 6, sides: 4 }), C.red);
+  for (const s of [-1, 1]) r.add(tube([[s * 0.42, 0.27, -0.75], [s * 0.42, 0.075, -0.3], [s * 0.42, 0.065, 0.3], [s * 0.42, 0.24, 0.85]], 0.06, { seg: 5, sides: 4 }), C.red);
   // Legs up to a lumpy seat.
   for (const [x, z] of [[-0.4, -0.35], [0.4, -0.35], [-0.38, 0.4], [0.38, 0.4]]) r.add(tube([[x * 1.05, 0.07, z * 1.1], [x, 0.3, z], [x * 0.95, 0.5, z * 0.95]], 0.045, { seg: 3, sides: 4 }), C.wood);
   r.add(slab(0.95, 0.12, 0.95, { bulge: 0.08, wob: 0.03, seed: 2, seg: 2 }), C.brass, at(0, 0.48, 0));
@@ -551,12 +551,12 @@ function buildKnitter(g, A) {
   for (const s of [-1, 1]) r.add(tube([[s * 0.42, 0.5, 0.4], [s * 0.45, 0.85, 0.25], [s * 0.42, 0.88, -0.2], [s * 0.4, 0.95, -0.45]], 0.045, { seg: 5, sides: 4 }), C.wood);
   // The barrel booth sitting in the chair: staves, two hoops, a lid like a squashed hat, two dark sleeve holes.
   r.add(drum([[0.01, 0.55], [0.32, 0.55], [0.4, 0.85], [0.41, 1.15], [0.35, 1.45], [0.01, 1.45]].map(([a, b]) => [a, b]), { seed: 7, segs: 12, wob: 0.015 }), C.wood, at(0, 0, -0.05));
-  for (const y of [0.72, 1.3]) r.add(new THREE.TorusGeometry(0.385, 0.03, 3, 10), C.soot, at(0, y, -0.05, Math.PI / 2, 0, 0, 1, 1, 1));
+  for (const y of [0.72, 1.3]) r.add(new THREE.TorusGeometry(0.385, 0.03, 3, 9), C.soot, at(0, y, -0.05, Math.PI / 2, 0, 0, 1, 1, 1));
   r.add(drum([[0.42, 0], [0.48, 0.05], [0.3, 0.14], [0.08, 0.32], [0.05, 0.45], [0.01, 0.52]], { seed: 9, lean: 0.08, segs: 10 }), C.teal, at(0, 1.43, -0.05));
   const holes = [[-0.17, 1.12], [0.17, 1.12]];
-  for (const [x, y] of holes) {
-    r.add(sphere(6, 4), C.hole, at(x, y, 0.33, 0, 0, 0, 0.09, 0.1, 0.06));
-    r.add(new THREE.TorusGeometry(0.095, 0.035, 4, 8), C.green, at(x, y, 0.35, 0, 0, 0, 1, 1, 1)); // shaggy sleeve cuff
+  for (const [x, y] of holes) { // sleeve holes
+    r.add(sphere(5, 3), C.hole, at(x, y, 0.33, 0, 0, 0, 0.09, 0.1, 0.06));
+    r.add(new THREE.TorusGeometry(0.095, 0.035, 3, 6), C.green, at(x, y, 0.35, 0, 0, 0, 1, 1, 1)); // shaggy sleeve cuff
   }
   // A peephole slot near the top, with two eyes in the dark: someone is in there.
   r.add(slab(0.36, 0.14, 0.08, { seg: 1, wob: 0.005 }), C.hole, at(0, 1.27, 0.33, -0.15));
@@ -670,7 +670,7 @@ function buildHacker(g, A) {
   b.add(drum([[0.01, 0], [0.55, 0], [0.6, 0.4], [0.5, 0.8], [0.01, 0.8]], { seed: 3, segs: 12, lean: -0.1, leanZ: 0.05 }), C.teal, at(0.05, 1.95, -0.2, 0, 0, 0.05));
   b.add(drum([[0.01, 0], [0.4, 0], [0.42, 0.3], [0.3, 0.55], [0.01, 0.6]], { seed: 4, segs: 12, lean: 0.12 }), C.brass, at(-0.02, 2.7, -0.25, 0, 0, -0.06));
   // Rivets: fat brass studs round the bottom drum.
-  for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; b.add(sphere(4, 3), C.brass, at(Math.cos(a) * 0.82, 1.2, -0.2 + Math.sin(a) * 0.82, 0, 0, 0, 0.06)); }
+  for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; b.add(sphere(4, 3), C.brass, at(Math.cos(a) * 0.82, 1.2, -0.2 + Math.sin(a) * 0.82, 0, 0, 0, 0.06)); }
   // Firebox door glowing at the front.
   b.add(drum([[0.01, 0], [0.24, 0], [0.24, 0.06], [0.01, 0.08]], { segs: 10 }), C.soot, at(0, 1.25, 0.6, Math.PI / 2, 0, 0));
   b.add(sphere(8, 5), C.orange, at(0, 1.25, 0.66, 0, 0, 0, 0.16, 0.12, 0.04));
