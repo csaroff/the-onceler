@@ -253,11 +253,12 @@ function bush(rand, seed) {
   balls.forEach(([x, y, z, r, h], i) => parts.push(lump(rand, {
     size: [r * rand(0.92, 1.08), h, r * 0.85], at: [x, y, z], ws: 6, hs: 5, wobble: 0.1, floor: 0, color: i % 2 ? C.bushDark : C.bush,
   })));
-  const spots = [[-0.6, 0.55], [0.15, 0.62], [0.55, 0.95]];
-  for (const [a0, y] of spots) {
+  // Berries all the way round, so every side has some; pushed out to sit on the surface.
+  const spots = [[-0.5, 0.55, 0.62], [0.5, 0.95, 0.5], [2.6, 0.6, 0.6]];
+  for (const [a0, y, d] of spots) {
     const a = a0 + rand(-0.2, 0.2), b = weld(new THREE.SphereGeometry(0.11, 5, 3));
     b.computeVertexNormals();
-    parts.push(place(paint(b, berry), { x: Math.sin(a) * 0.62, y, z: Math.cos(a) * 0.55 + 0.1 }));
+    parts.push(place(paint(b, berry), { x: Math.sin(a) * d * 1.05, y, z: Math.cos(a) * d * 0.95 }));
   }
   return parts;
 }
@@ -274,7 +275,7 @@ function rock(rand) {
 function pebbles(rand) {
   const parts = [];
   for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * TAU + rand(-0.4, 0.4), d = i === 0 ? 0 : rand(0.15, 0.26), r = rand(0.05, 0.09);
+    const a = (i / 5) * TAU + rand(-0.4, 0.4), d = i === 0 ? 0 : rand(0.2, 0.26), r = rand(0.06, 0.1);
     parts.push(lump(rand, { size: [r * 1.3, r * 0.8, r], at: [Math.cos(a) * d, r * 0.4, Math.sin(a) * d], ws: 5, hs: 3, wobble: 0.1, floor: 0, color: C.pebble[(i + Math.floor(rand(0, 5))) % 5] }));
   }
   return parts;
@@ -287,16 +288,16 @@ function reed(rand) {
   stalks.forEach(([x, h], i) => {
     const bend = rand(-0.12, 0.12) + (i ? 0.12 : -0.06), z = rand(-0.08, 0.08);
     parts.push(noodle([[x, 0, z], [x + bend * 0.3, h * 0.5, z], [x + bend, h * 0.78, z]], 0.03, { sides: 3, segments: 3, color: C.reed }));
-    // The cattail head, then a thin spike above it.
+    // The cattail head.
     const head = weld(new THREE.SphereGeometry(1, 5, 3));
     head.scale(0.075, 0.18, 0.075);
     head.computeVertexNormals();
     parts.push(place(paint(head, C.cattail), { x: x + bend * 1.05, y: h * 0.86, z, rz: -bend * 0.6 }));
-    parts.push(noodle([[x + bend * 1.08, h * 0.95, z], [x + bend * 1.18, h, z]], 0.02, { sides: 3, segments: 1, tip: true, color: C.reed }));
   });
-  // A long leaf arching out and drooping.
+  // Two long flat leaves arching out and drooping, facing different ways so one always shows its width.
   const s = rand() < 0.5 ? -1 : 1;
-  parts.push(noodle([[0.05, 0, 0.03], [0.12 * s, 0.6, 0.08], [0.34 * s, 0.85, 0.12], [0.48 * s, 0.68, 0.14]], (u) => 0.045 * (1 - u * 0.6), { sides: 3, segments: 3, tip: true, color: C.leaf, flatten: 0.6 }));
+  parts.push(ribbon([[0.04, 0, 0.03], [0.1 * s, 0.6, 0.06], [0.3 * s, 0.86, 0.1], [0.46 * s, 0.7, 0.12]], 0.075, V(0, 0, 1), C.leaf));
+  parts.push(ribbon([[0.08, 0, -0.02], [0.12, 0.45, -0.12 * s], [0.16, 0.66, -0.3 * s], [0.18, 0.52, -0.42 * s]], 0.065, V(1, 0, 0), C.leaf));
   return parts;
 }
 
@@ -311,10 +312,10 @@ function mushroom(rand, seed) {
   const cap = spun([[0.07, 0.25], [0.16, 0.24], [0.14, 0.34], [0.075, 0.45], [0.0, 0.51]], 7, capColor, capLean);
   const parts = [stalk, cap];
   // Flat white spots stuck on the cap's surface, facing out.
-  const spots = [[0.29, 0.3 + seed], [0.3, 2.4 + seed], [0.39, 1.3 + seed], [0.3, 4.4 + seed]];
+  const spots = [[0.29, 0.3 + seed], [0.3, 2.4 + seed], [0.4, 1.3 + seed], [0.3, 4.4 + seed], [0.4, 3.6 + seed]];
   spots.forEach(([y, a], i) => {
-    const r = y < 0.34 ? 0.152 : 0.112;
-    const spot = new THREE.CircleGeometry(i === 2 ? 0.035 : 0.042, 6);
+    const r = y < 0.34 ? 0.152 : 0.108;
+    const spot = new THREE.CircleGeometry(y > 0.34 ? 0.04 : 0.05, 6);
     spot.deleteAttribute('uv');
     paint(spot, PALETTE.white);
     const outward = V(Math.cos(a), y < 0.34 ? 0.2 : 0.75, Math.sin(a)).normalize();
@@ -471,9 +472,9 @@ function smoke(rand) {
 // A splash: a low crown of water with rounded points, and a ring of fat round drops thrown up and out of it.
 function splash(rand) {
   // The crown: a short open cup whose rim rises into rounded points; drawn on both sides.
-  const n = 12, pos = [], index = [];
+  const n = 10, pos = [], index = [];
   for (let k = 0; k < n; k++) {
-    const a = (k / n) * TAU, r0 = 0.24, r1 = 0.34, h = 0.13 + 0.11 * Math.max(0, Math.cos((k / n) * TAU * 4)) + rand(0, 0.04);
+    const a = (k / n) * TAU, r0 = 0.24, r1 = 0.34, h = 0.13 + 0.11 * Math.max(0, Math.cos((k / n) * TAU * 5)) + rand(0, 0.04);
     pos.push(Math.cos(a) * r0, 0, Math.sin(a) * r0, Math.cos(a) * r1, h, Math.sin(a) * r1);
   }
   for (let k = 0; k < n; k++) {
@@ -485,9 +486,9 @@ function splash(rand) {
   crown.setIndex(index);
   crown.computeVertexNormals();
   const parts = [paint(crown, C.splash)];
-  // Four drops, each a round blob, one smaller than the rest.
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * TAU + rand(-0.4, 0.4), h = rand(0.45, 0.75), d = rand(0.3, 0.45), r = i === 3 ? 0.055 : 0.075;
+  // Three drops, each a round blob, one smaller than the rest.
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * TAU + rand(-0.4, 0.4), h = rand(0.45, 0.75), d = rand(0.3, 0.45), r = i === 2 ? 0.06 : 0.08;
     const drop = weld(new THREE.SphereGeometry(r, 5, 3));
     drop.scale(1, 1.25, 1);
     drop.computeVertexNormals();
@@ -502,6 +503,18 @@ const SPAN = { cloud: 16, flower: 0.4, grass: 0.4, bush: 1.9, rock: 1.3, pebbles
 
 // ---------------------------------------------------------------- exports
 
+// Throw away triangles with no area (lathe tips, closed tube ends), so they do not count against the budget.
+function dropSlivers(geo) {
+  const p = geo.attributes.position, keep = [], a = V(), b = V(), c = V();
+  const index = geo.index ? geo.index.array : [...Array(p.count).keys()];
+  for (let i = 0; i < index.length; i += 3) {
+    a.fromBufferAttribute(p, index[i]); b.fromBufferAttribute(p, index[i + 1]); c.fromBufferAttribute(p, index[i + 2]);
+    if (b.sub(a).cross(c.sub(a)).lengthSq() > 1e-12) keep.push(index[i], index[i + 1], index[i + 2]);
+  }
+  geo.setIndex(keep);
+  return geo;
+}
+
 const cache = new Map();
 // One merged shape with colours baked into the corners, so the game can stamp out thousands of copies.
 export function merged(kind = 'flower', seed = 1) {
@@ -509,7 +522,7 @@ export function merged(kind = 'flower', seed = 1) {
   if (!cache.has(key)) {
     const rand = seeded(seed * 7 + 3);
     for (let i = 0; i < 8; i++) rand();   // nearby seeds start out alike; stir them apart first
-    const geo = mergeGeometries(draw(rand, Math.abs(seed)));
+    const geo = dropSlivers(mergeGeometries(draw(rand, Math.abs(seed))));
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
     cache.set(key, geo);
