@@ -42,12 +42,12 @@ export function createWar(g) {
 
   // ---------------------------------------------------------------- shots
   // A thrown or fired thing, lobbed so that it lands on (tx, ty, tz).
-  war.shoot = ({ kind, x, y, z, tx, ty, tz, speed, dmg, splash = 0, friendly }) => {
+  war.shoot = ({ kind, x, y, z, tx, ty, tz, speed, dmg, splash = 0, friendly, target = null, owner = null }) => {
     const d = Math.hypot(tx - x, ty - y, tz - z), time = Math.max(0.15, d / speed), gravity = 14;
     const model = kind === 'fruit' ? truffula.build({ kind: 'fruit' }) : arms.build({ kind });
     if (kind === 'fruit') model.scale.setScalar(1.6);
     scene.add(model);
-    shots.push({ model, x, y, z, vx: (tx - x) / time, vy: (ty - y + 0.5 * gravity * time * time) / time, vz: (tz - z) / time, gravity, dmg, splash, friendly, kind, age: 0 });
+    shots.push({ model, x, y, z, vx: (tx - x) / time, vy: (ty - y + 0.5 * gravity * time * time) / time, vz: (tz - z) / time, gravity, dmg, splash, friendly, kind, target, owner, age: 0 });
   };
   war.playerShot = (x, y, z, dx, dy, dz) => {
     const model = arms.build({ kind: 'rock' });
@@ -81,6 +81,15 @@ export function createWar(g) {
         g.player.damage(s.dmg);
         land(s);
         done = true;
+      } else if (s.target && s.target.type !== 'player' && valid(s.target)) {
+        // Aimed at a machine or a gun: it counts if it comes down on it.
+        const at = spot(s.target);
+        if (dist(s.x, s.z, at.x, at.z) < at.radius + 0.8 && s.y < height(at.x, at.z) + 3.5) {
+          strikeTarget(s.target, s.dmg);
+          if (s.owner) s.owner.chase = 0;
+          land(s);
+          done = true;
+        }
       }
       if (!done && s.y < height(s.x, s.z)) { land(s); done = true; }
       if (done) { scene.remove(s.model); shots.splice(i, 1); }
@@ -179,12 +188,12 @@ export function createWar(g) {
       pose(e, def.attack || 'attack', Math.min(1, e.timer / seconds));
       if (!e.struck && e.timer >= seconds * (def.range ? 0.5 : 0.6)) {
         e.struck = true;
-        e.chase = 0;
         if (def.shot) {
           const ty = e.target.type === 'player' ? g.player.y + 1.2 : height(at.x, at.z) + 1;
-          war.shoot({ kind: def.shot, x: e.x, y: e.y + def.size * 1.6, z: e.z, tx: at.x + rand(-0.8, 0.8), ty, tz: at.z + rand(-0.8, 0.8), speed: 17, dmg: def.dmg, friendly: false });
+          war.shoot({ kind: def.shot, x: e.x, y: e.y + def.size * 1.6, z: e.z, tx: at.x + rand(-0.8, 0.8), ty, tz: at.z + rand(-0.8, 0.8), speed: 17, dmg: def.dmg, friendly: false, target: e.target, owner: e });
         } else if (d <= need + 1.2) {
           strikeTarget(e.target, def.dmg);
+          e.chase = 0;
           if (def.range) for (let i = 0; i < 5; i++) g.fx.puff(at.x + rand(-1, 1), e.y + 1 + rand(0, 1), at.z + rand(-1, 1), { size: 0.6, life: 1, color: '#2a2422' });
           else if (def.boss) { g.fx.burst(e.x + Math.sin(e.heading) * def.reach * 0.7, e.y + 0.3, e.z + Math.cos(e.heading) * def.reach * 0.7, '#d8c9a0', 14, 7, 0.6); g.audio.crash(); }
         }
