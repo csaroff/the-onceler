@@ -41,3 +41,13 @@ torn ear, carrying a whole broken Truffula trunk with its stripes clearly showin
 (the current lieutenant's club reads as a candy cane: make it thicker, splintered at the break, held two-handed).
 Every existing pose must work for both. Add a pose `rage` (t 0..1): rears up, beats its chest and roars, for the
 moment it turns. Add a pose `taunt` (t s): stands tall, shakes its club or fist at you and bellows, looping.
+
+### Notes for whoever picks this follow-up up
+
+A previous attempt spent two hours reading and changed nothing. Do not survey the game code: everything you need is
+in this file, `docs/ART.md`, `src/toon.js` and `src/art/barbaloot.js`. Make your first edit within ten minutes.
+- The game already asks for `build({ variant: 'enraged' })` and `build({ variant: 'champion' })` and for the poses
+  `rage` and `taunt`; today they silently fall back to the happy animal and to `idle`.
+- Order of work: `enraged` first (face, bristling fur, hunched shoulders, claws), then `rage` and `taunt`, then
+  `champion` and its club. Render after each and look.
+- The old `feral` and `lieutenant` variants are no longer used by the game. Keep them working, but spend no time on them.
