@@ -180,6 +180,9 @@ function updateCompass() {
   // While he is showing himself, the compass says which way to look.
   if (g.lorax.state === 'watch') marks.push({ label: 'the Lorax', rel: bearing(g.lorax.x, g.lorax.z), cls: 'danger' });
   if (g.war.challenge) marks.push({ label: 'lieutenant', rel: bearing(g.war.challenge.x, g.war.challenge.z), cls: 'danger' });
+  // Two labels in the same direction would print on top of each other: lift the later one onto its own line.
+  const named = marks.filter((m) => m.cls).sort((x, y) => x.rel - y.rel);
+  named.forEach((m, i) => { if (i && Math.abs(m.rel - named[i - 1].rel) < 0.3 && !named[i - 1].cls.includes('up')) m.cls += ' up'; });
   g.ui.compass(marks);
 }
 

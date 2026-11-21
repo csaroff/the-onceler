@@ -340,6 +340,15 @@ export function createWar(g) {
     war.threat = 0;
   };
 
+  // The last tree is down: there is nothing left to fight over. Everything still attacking is taken away.
+  war.end = () => {
+    for (const e of enemies) scene.remove(e.model);
+    for (const s of shots) scene.remove(s.model);
+    enemies.length = 0;
+    shots.length = 0;
+    Object.assign(war, { challenge: null, duel: false, phase: 'calm', enabled: false });
+  };
+
   war.update = (dt) => {
     updateEnemies(dt);
     updateShots(dt);

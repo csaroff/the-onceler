@@ -133,6 +133,7 @@ export function createScenes(g) {
           l.model.rotation.y = Math.atan2(p.x - at.x, p.z - at.z);
           g.camera.fov = 30;
           g.camera.updateProjectionMatrix();
+          g.war.end();
           g.ui.say('lastTree', 4);
           g.audio.dirge();
         },

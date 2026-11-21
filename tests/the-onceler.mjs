@@ -210,7 +210,8 @@ assert.ok(s.sold > before.sold + 20, `the wagon sells in town on its own, sold $
 await run('t.stand(-10, 18, -36, -20)');
 await shot('10-industry');
 
-// ---- The very last tree.
+// ---- The very last tree. Whatever was still coming for you stops mattering.
+await run('g.war.spawn("loot", 30, 30); g.war.spawn("swan", 40, 30)');
 await run('for (const tree of g.world.standing().slice(1)) g.world.fell(tree, 0, 0); t.run(4); window.last = g.world.standing()[0]');
 await run('t.stand(last.x - 3, last.z, last.x, last.z); for (let i = 0; i < 3; i++) { g.click(0); t.run(0.7); } t.until(() => g.scenes.active, 6); t.run(9)');
 s = await read();
@@ -220,6 +221,7 @@ await shot('11-lifted');
 await run('t.until(() => !g.scenes.active, 60)');
 s = await read();
 assert.equal(s.hasSeed, true, 'you are left with one seed');
+assert.equal(await run('return g.war.enemies.length'), 0, 'nothing is left to attack you while you plant it');
 await run('t.run(20)');
 await shot('12-ruin');
 
