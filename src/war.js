@@ -94,7 +94,7 @@ export function createWar(g) {
     const tough = def.boss ? 1 : 1 + war.wave * 0.08;
     const e = {
       kind, def, model, x, z, y: height(x, z) + (def.flies || 0), hp: def.hp * tough, maxHp: def.hp * tough, state: 'move', timer: 0,
-      cooldown: rand(0.3, 1.5), target: null, think: 0, phase: rand(0, 6), heading: 0, slow: 0, brood: 10, volley: 0, from: { x, y: 0, z }, aim: { x, y: 0, z },
+      cooldown: rand(0.3, 1.5), target: null, think: 0, chase: 0, givenUp: false, phase: rand(0, 6), heading: 0, slow: 0, brood: 10, volley: 0, from: { x, y: 0, z }, aim: { x, y: 0, z },
     };
     enemies.push(e);
     return e;
@@ -111,7 +111,7 @@ export function createWar(g) {
     else g.defences.damage(t.ref, amount);
   }
   function chooseTarget(e) {
-    if (e.def.boss) return playerTarget;
+    if (e.def.boss || e.givenUp) return playerTarget;
     const toPlayer = dist(e.x, e.z, g.player.x, g.player.z);
     if (toPlayer < 22) return playerTarget;
     let best = null, bestD = Infinity;
@@ -179,6 +179,7 @@ export function createWar(g) {
       pose(e, def.attack || 'attack', Math.min(1, e.timer / seconds));
       if (!e.struck && e.timer >= seconds * (def.range ? 0.5 : 0.6)) {
         e.struck = true;
+        e.chase = 0;
         if (def.shot) {
           const ty = e.target.type === 'player' ? g.player.y + 1.2 : height(at.x, at.z) + 1;
           war.shoot({ kind: def.shot, x: e.x, y: e.y + def.size * 1.6, z: e.z, tx: at.x + rand(-0.8, 0.8), ty, tz: at.z + rand(-0.8, 0.8), speed: 17, dmg: def.dmg, friendly: false });
@@ -226,7 +227,7 @@ export function createWar(g) {
       e.x = e.from.x + (e.aim.x - e.from.x) * ease; e.y = e.from.y + (e.aim.y - e.from.y) * ease; e.z = e.from.z + (e.aim.z - e.from.z) * ease;
       pose(e, 'dive', t);
       if (t >= 1) {
-        if (dist(e.x, e.z, at.x, at.z) < def.size + 2.2 + at.radius) strikeTarget(e.target, def.dmg);
+        if (dist(e.x, e.z, at.x, at.z) < def.size + 2.2 + at.radius) { strikeTarget(e.target, def.dmg); e.chase = 0; }
         g.fx.burst(e.x, e.y - 0.8, e.z, '#d8c9a0', 6, 4, 0.4);
         e.state = def.boss ? 'rest' : 'climb'; e.timer = 0;
       }
@@ -249,6 +250,9 @@ export function createWar(g) {
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
       e.slow = Math.max(0, e.slow - dt);
+      // Anything that has gone after a machine or a gun for half a minute without landing a blow gives up on it
+      // and comes for you. Otherwise a wagon it cannot catch would keep the wave going for ever.
+      if (e.target && e.target.type !== 'player') { e.chase += dt; if (e.chase > 30) e.givenUp = true; } else e.chase = 0;
       if (e.state === 'dead') {
         e.timer += dt;
         e.y += (height(e.x, e.z) - e.y) * Math.min(1, dt * 5);
