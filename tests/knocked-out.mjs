@@ -21,9 +21,16 @@ assert.equal(s.enemies + s.line, 0, 'and the army has gone');
 assert.equal(s.loraxState, 'hidden');
 assert.equal(s.raid, 0, 'you did not beat that raid');
 
-// Fell some more, and he is back. Losing never switches the war off.
-await run('t.clearcut(5, 11, 12)');
-assert.ok(await run("return t.until(() => g.war.phase === 'muster', 300)"), 'another army comes');
+// Your machines go on felling while you are out cold, so the trees to answer for pile up again at once. Even so he
+// gives a beaten man time to get to town and back and arm himself: nothing stirs for three minutes.
+await run('t.clearcut(5, 11, 40)');
+await run('t.run(180)');
+s = await read();
+assert.equal(s.phase, 'calm', 'three minutes on, he has not so much as shown himself');
+assert.equal(s.money, 150, 'and nothing more has been taken');
+
+// But he is back. Losing never switches the war off.
+assert.ok(await run("return t.until(() => g.war.phase === 'muster', 200)"), 'another army comes');
 
 // However long the war goes on, an army stays a size a fortified player can face.
 const big = await run("g.war.clear(); g.war.raid = 40; g.war.bearing = 1; g.war.muster(); return g.war.standing()");
