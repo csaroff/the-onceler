@@ -25,7 +25,7 @@ export function createUI() {
     wave: (text) => show('wave', text || ''),
     // Marks along a strip: `rel` is the angle to the thing, 0 dead ahead, positive to the right.
     compass(marks) {
-      show('compass', marks.map((m) => `<span class="${m.cls || ''}" style="left:${(50 + Math.max(-1, Math.min(1, m.rel / 1.3)) * 50).toFixed(1)}%">${m.label}</span>`).join(''));
+      show('compass', marks.map((m) => `<span class="${m.cls || ''}" style="left:${(50 + Math.max(-1, Math.min(1, m.rel / 1.3)) * 50).toFixed(1)}%${m.level ? `;bottom:${24 + m.level * 21}px` : ''}">${m.label}</span>`).join(''));
     },
     pop(text, spend = false) {
       const el = document.createElement('div');

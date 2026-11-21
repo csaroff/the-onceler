@@ -211,9 +211,9 @@ function updateCompass() {
   // While he is showing himself, the compass says which way to look.
   if (g.lorax.state === 'watch' || g.lorax.state === 'command') marks.push({ label: 'the Lorax', rel: bearing(g.lorax.x, g.lorax.z), cls: 'danger' });
   if (g.war.champion) marks.push({ label: 'champion', rel: bearing(g.war.champion.x, g.war.champion.z), cls: 'danger' });
-  // Two labels in the same direction would print on top of each other: lift the later one onto its own line.
+  // Labels in the same direction would print on top of each other: each one that crowds the last goes a line higher.
   const named = marks.filter((m) => m.cls).sort((x, y) => x.rel - y.rel);
-  named.forEach((m, i) => { if (i && Math.abs(m.rel - named[i - 1].rel) < 0.3 && !named[i - 1].cls.includes('up')) m.cls += ' up'; });
+  named.forEach((m, i) => { m.level = i && Math.abs(m.rel - named[i - 1].rel) < 0.34 ? named[i - 1].level + 1 : 0; });
   g.ui.compass(marks);
 }
 

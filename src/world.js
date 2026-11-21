@@ -102,6 +102,13 @@ export function createWorld(scene, hooks) {
         color: TUFT_COLORS[Math.floor(hash(gx, gz, 17) * TUFT_COLORS.length)],
         hp: 3, state: felled.has(id) ? 'gone' : 'standing', shake: 0, slot: -1, lod: 0, height: full[variant].part.height, climber: null,
       };
+      // Where its tuft is and how big, for anything that needs to know what the tuft hides.
+      const part = full[variant].part, box = part.tuft.boundingBox;
+      v3.copy(part.top).multiplyScalar(tree.scale).applyAxisAngle(up, tree.rot);
+      Object.assign(tree, {
+        tuftX: x + v3.x, tuftZ: z + v3.z, tuftLo: y + v3.y + box.min.y * tree.scale, tuftHi: y + v3.y + box.max.y * tree.scale,
+        tuftR: Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.5 * tree.scale,
+      });
       land.trees.push(tree);
       land.cells[j * PER + i] = tree;
     }

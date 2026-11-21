@@ -5,9 +5,12 @@ import * as THREE from 'three';
 import * as loraxArt from './art/lorax.js';
 import * as truffula from './art/truffula.js';
 import * as scenery from './art/scenery.js';
-import { height, dist, rand, isWild, LAKE_Y, TOWN, THRONE } from './terrain.js';
+import { NO_INK } from './ink.js';
+import { toon } from './toon.js';
+import { height, hash, dist, rand, isWild, LAKE_Y, TOWN, THRONE } from './terrain.js';
 
-const FAR_HEIGHT = 6.5; // how tall he is drawn at a distance, so the outline still reads
+const FAR_HEIGHT = 7; // how tall he is drawn at a distance, so the outline still reads
+const SPIRE = 24;     // he stands on a spire of ice this high, clear of the tops of the tallest trees
 
 export function createLorax(g) {
   const model = loraxArt.build();
@@ -16,6 +19,28 @@ export function createLorax(g) {
   const tall = model.userData.height || new THREE.Box3().setFromObject(model).max.y || 1;
   const FAR_SCALE = FAR_HEIGHT / tall;
   const lorax = { model, state: 'hidden', timer: 0, x: 0, z: 0, sightings: 0, order: null, orderTimer: 0 };
+
+  // Where he shows himself a crooked spire of ice comes up out of the ground, and he stands on top of it, against the
+  // sky, with a shaft of cold light going up from him. In thick forest it is the first thing you see.
+  const spireGeo = new THREE.CylinderGeometry(1.6, 4.4, SPIRE, 7, 7).translate(0, SPIRE / 2, 0);
+  {
+    const at = spireGeo.attributes.position;
+    for (let i = 0; i < at.count; i++) {
+      const y = at.getY(i), ring = Math.round((y / SPIRE) * 7), lean = Math.sin(y * 0.33) * 0.9;
+      if (y > SPIRE - 0.01) continue; // the top stays flat, for him to stand on
+      at.setXYZ(i, at.getX(i) * (0.8 + hash(i, ring, 71) * 0.5) + lean, y, at.getZ(i) * (0.8 + hash(ring, i, 72) * 0.5));
+    }
+    spireGeo.computeVertexNormals();
+  }
+  const marker = new THREE.Group();
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.8, 2, 150, 12, 1, true).translate(0, SPIRE + FAR_HEIGHT + 2 + 75, 0), // it starts above his head, so he is seen against the sky
+    new THREE.MeshBasicMaterial({ color: '#cfefff', transparent: true, opacity: 0.4, fog: false, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  beam.layers.set(NO_INK);
+  marker.add(new THREE.Mesh(spireGeo, toon('#b9dcee')), beam);
+  marker.visible = false;
+  g.scene.add(marker);
 
   // His seat: a great stump on a bare mound, ringed with dead trees.
   const seat = truffula.build({ kind: 'stump' });
@@ -33,7 +58,7 @@ export function createLorax(g) {
 
   // How much stands between you and a figure at (x, z): ground that rises across the line of sight, and trees on it.
   function blockers(x, z) {
-    const p = g.player, eyeY = p.y + 1.7, headY = height(x, z) + FAR_HEIGHT * 0.7;
+    const p = g.player, eyeY = p.y + 1.7, headY = height(x, z) + SPIRE + FAR_HEIGHT * 0.7;
     const dx = x - p.x, dz = z - p.z, d2 = dx * dx + dz * dz;
     let count = 0;
     for (let i = 1; i < 12; i++) {
@@ -44,27 +69,29 @@ export function createLorax(g) {
       const t = ((o.x - p.x) * dx + (o.z - p.z) * dz) / d2;
       if (t > 0 && t < 1 && Math.hypot(o.x - (p.x + dx * t), o.z - (p.z + dz * t)) < o.radius + 3) count += 4;
     }
-    for (const tree of g.world.treesNear(p.x + dx / 2, p.z + dz / 2, Math.sqrt(d2) / 2 + 4)) {
+    // Tufts across the view of him. He is looked at from his feet to his crown, so both lines of sight are checked.
+    const feetY = headY - FAR_HEIGHT * 0.7;
+    for (const tree of g.world.treesNear(p.x + dx / 2, p.z + dz / 2, Math.sqrt(d2) / 2 + 6)) {
       if (tree.state !== 'standing') continue;
-      const t = ((tree.x - p.x) * dx + (tree.z - p.z) * dz) / d2;
+      const t = ((tree.tuftX - p.x) * dx + (tree.tuftZ - p.z) * dz) / d2;
       if (t < 0.02 || t > 1) continue;
-      const off = Math.hypot(tree.x - (p.x + dx * t), tree.z - (p.z + dz * t));
-      const tuftFrom = tree.y + tree.height * tree.scale * 0.7; // the line of sight passes under most tufts
-      if (off < 0.8 || (off < 3.4 && eyeY + (headY - eyeY) * t > tuftFrom)) count++;
+      if (Math.hypot(tree.tuftX - (p.x + dx * t), tree.tuftZ - (p.z + dz * t)) > tree.tuftR + 1.2 * (1 - t)) continue;
+      const lo = eyeY + (feetY - eyeY) * t, hi = eyeY + (headY + FAR_HEIGHT * 0.3 - eyeY) * t;
+      if (hi > tree.tuftLo && lo < tree.tuftHi) count++;
     }
     return count;
   }
 
   // How cluttered the view is behind a figure at (x, z). Zero means he stands against the sky.
   function backdrop(x, z) {
-    const p = g.player, eyeY = p.y + 1.7, headY = height(x, z) + FAR_HEIGHT * 0.7;
+    const p = g.player, eyeY = p.y + 1.7, headY = height(x, z) + SPIRE + FAR_HEIGHT * 0.7;
     const dx = x - p.x, dz = z - p.z, d2 = dx * dx + dz * dz;
     let count = 0;
     for (const t of [1.15, 1.3, 1.5, 1.75, 2.1]) if (height(p.x + dx * t, p.z + dz * t) > eyeY + (headY - eyeY) * t - 1) count += 2;
     for (const tree of g.world.treesNear(p.x + dx * 1.6, p.z + dz * 1.6, Math.sqrt(d2) * 0.65)) {
       if (tree.state !== 'standing') continue;
-      const t = ((tree.x - p.x) * dx + (tree.z - p.z) * dz) / d2;
-      if (t > 1 && t < 2.2 && Math.hypot(tree.x - (p.x + dx * t), tree.z - (p.z + dz * t)) < 7 * t) count++;
+      const t = ((tree.tuftX - p.x) * dx + (tree.tuftZ - p.z) * dz) / d2;
+      if (t > 1 && t < 2.2 && Math.hypot(tree.tuftX - (p.x + dx * t), tree.tuftZ - (p.z + dz * t)) < 7 * t && tree.tuftHi > eyeY + (headY - eyeY) * t - 2) count++;
     }
     return count;
   }
@@ -72,15 +99,15 @@ export function createLorax(g) {
   // Somewhere a long way off with a clear view of you: high ground for preference. With no bearing given it is in front
   // of you if possible; with one, it is within a short arc of that bearing.
   function chooseSpot(bearing = null) {
-    const p = g.player, dir = p.facing(), limit = Math.min(190, g.scene.fog.far * 0.62);
+    const p = g.player, dir = p.facing(), limit = Math.min(150, g.scene.fog.far * 0.62);
     const centre = bearing ?? Math.atan2(dir.x, dir.z), arc = bearing === null ? 3 : 0.5;
     let best = null, bestScore = -Infinity;
-    for (const range of [105, 135, 165, 190]) {
+    for (const range of [95, 110, 125, 150]) {
       for (let turn = -arc; turn <= arc + 0.01; turn += arc / 15) {
         const a = centre + turn, d = Math.min(range, limit), x = p.x + Math.sin(a) * d, z = p.z + Math.cos(a) * d, y = height(x, z);
         if (d < 85 || !isWild(x, z, 6) || y < LAKE_Y + 0.5) continue;
         const ahead = bearing === null ? Math.cos(turn) * 2 : 0;
-        const score = ahead + Math.min(2.5, (y - p.y) * 0.12) - blockers(x, z) * 3 - Math.min(3, backdrop(x, z) * 0.4) - Math.abs(d - 135) / 100 + rand(0, 0.3);
+        const score = ahead + Math.min(2.5, (y - p.y) * 0.12) - blockers(x, z) * 3 - Math.min(3, backdrop(x, z) * 0.4) - Math.abs(d - 110) / 100 + rand(0, 0.3);
         if (score > bestScore) { best = { x, z }; bestScore = score; }
       }
     }
@@ -91,7 +118,10 @@ export function createLorax(g) {
     Object.assign(lorax, { x: at.x, z: at.z, state, order: null });
     model.visible = true;
     model.scale.setScalar(FAR_SCALE);
-    model.position.set(at.x, height(at.x, at.z), at.z);
+    const y = height(at.x, at.z);
+    model.position.set(at.x, y + SPIRE, at.z);
+    marker.position.set(at.x, y, at.z);
+    marker.visible = true;
   }
 
   // He lets himself be seen, for a few seconds. Returns where he is standing.
@@ -115,15 +145,19 @@ export function createLorax(g) {
 
   function vanish() {
     if (lorax.state === 'hidden') return;
-    g.fx.burst(lorax.x, height(lorax.x, lorax.z) + 1.5, lorax.z, '#bfe9ff', 8, 3, 0.5);
+    g.fx.burst(lorax.x, height(lorax.x, lorax.z) + SPIRE + 2, lorax.z, '#bfe9ff', 14, 5, 0.8);
     model.visible = false;
+    marker.visible = false;
     lorax.state = 'hidden';
   }
   lorax.vanish = vanish;
 
   lorax.update = (dt) => {
+    // In the cutscene where his army is sent home he stays up there; in the others he is on the ground, and it is gone.
+    if (lorax.state === 'hidden' || (lorax.state === 'scene' && model.position.y < marker.position.y + SPIRE - 1)) marker.visible = false;
     if (lorax.state !== 'watch' && lorax.state !== 'command') return;
     const p = g.player;
+    beam.material.opacity = 0.34 + Math.sin(g.time * 2.3) * 0.08;
     model.rotation.y = Math.atan2(p.x - lorax.x, p.z - lorax.z);
     if (lorax.state === 'watch') {
       lorax.timer -= dt;

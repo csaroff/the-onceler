@@ -340,6 +340,18 @@ export function createWar(g) {
         if (!e.def.boss && e.stall > (e.def.flies ? 45 : 28)) { g.fx.burst(e.x, e.y + 0.6, e.z, '#d8c9a0', 6, 3, 0.4); drop(e, i); continue; }
         if (e.def.flies) updateFlyer(e, dt); else updateGround(e, dt);
       }
+      // Nothing on the ground may stand inside another: they crowd round you; they do not pile up on one spot.
+      if (e.hp > 0 && !e.def.flies && !waiting(e)) {
+        for (let j = i - 1; j >= 0; j--) {
+          const o = enemies[j];
+          if (o.hp <= 0 || o.def.flies || waiting(o)) continue;
+          const dx = e.x - o.x, dz = e.z - o.z, d = Math.hypot(dx, dz), min = (e.def.size + o.def.size) * 0.9;
+          if (d >= min || d < 0.001) continue;
+          const push = (min - d) / 2, nx = dx / d, nz = dz / d;
+          if (passable(e.x, e.z, e.x + nx * push, e.z + nz * push)) { e.x += nx * push; e.z += nz * push; }
+          if (passable(o.x, o.z, o.x - nx * push, o.z - nz * push)) { o.x -= nx * push; o.z -= nz * push; }
+        }
+      }
       // Nothing on the ground may stand on top of you.
       if (e.hp > 0 && !e.def.flies && e.state !== 'throne') {
         const dx = e.x - p.x, dz = e.z - p.z, d = Math.hypot(dx, dz), min = e.def.size + 0.5;
@@ -356,11 +368,11 @@ export function createWar(g) {
     const p = g.player, army = armyFor(war.raid);
     const ridge = g.lorax.command(war.bearing);
     const a = Math.atan2(ridge.x - p.x, ridge.z - p.z), ax = Math.sin(a), az = Math.cos(a);
-    const mid = footing(p.x + ax * 36, p.z + az * 36);
+    const mid = footing(p.x + ax * 28, p.z + az * 28);
     war.field = { x: p.x, z: p.z, a, mid, ridge };
     const row = Math.ceil(Math.sqrt(army.count * 2.5));
     for (let i = 0; i < army.count; i++) {
-      const across = (i % row - (row - 1) / 2) * 2.4, back = 74 + Math.floor(i / row) * 3;
+      const across = (i % row - (row - 1) / 2) * 2.2, back = 54 + Math.floor(i / row) * 3;
       const at = footing(p.x + ax * back + az * across, p.z + az * back - ax * across);
       spawn(army.troops[i % army.troops.length], at.x + rand(-0.4, 0.4), at.z + rand(-0.4, 0.4), 'line');
     }
