@@ -106,7 +106,7 @@ g.snapshot = () => ({
   stock: { ...g.stock }, seen: [...g.story.seen], felled: g.story.felled, ruin: g.ruin, ended: g.ended,
   felledTrees: g.world.felled(),
   player: { x: g.player.x, z: g.player.z, yaw: g.player.yaw, tufts: g.player.tufts, thneeds: g.player.thneeds },
-  owned: { ...g.business.owned }, gear: { ...g.business.gear }, defences: g.defences.snapshot(), crafting: g.crafting.snapshot(), war: g.war.snapshot(), emptied: g.wildlife.emptied,
+  owned: { ...g.business.owned }, wrecks: g.business.wrecks(), gear: { ...g.business.gear }, defences: g.defences.snapshot(), crafting: g.crafting.snapshot(), war: g.war.snapshot(), emptied: g.wildlife.emptied,
 });
 
 // Apply a snapshot to a freshly started game.
@@ -120,6 +120,7 @@ g.restore = (d) => {
   g.ended = d.ended;
   for (const [id, count] of Object.entries(d.owned)) for (let i = 0; i < count; i++) g.business.buy(id, true);
   for (const [id, count] of Object.entries(d.gear || {})) for (let i = 0; i < count; i++) g.business.buyGear(id, true);
+  g.business.setWrecks(d.wrecks);
   g.crafting.restore(d.crafting);
   g.defences.restore(d.defences);
   g.wildlife.restore(d.emptied);

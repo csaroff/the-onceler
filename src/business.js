@@ -384,13 +384,22 @@ export function createBusiness(g) {
     if (u.broken) return;
     u.hp -= amount;
     if (u.hp > 0) return;
-    u.broken = true;
-    u.model.rotation.z = 0.28;
+    wreckUnit(u);
     g.audio.crash();
     g.ui.tip(`Your ${u.name} has been wrecked. Stand by it and press [E] to mend it for $${repairCost(u)}.`);
   }
   const repairCost = (u) => Math.round(u.base * 0.2);
-  const brokenNearby = () => units.find((u) => u.broken && dist(u.x, u.z, g.player.x, g.player.z) < u.radius + 3.5);
+  // The nearest wreck within reach. The reach is generous: a machine can be wrecked out in a lake or on a cliff face,
+  // where you cannot stand, and it must still be mendable from the nearest ground you can.
+  function brokenNearby() {
+    let best = null, bestD = Infinity;
+    for (const u of units) {
+      const d = dist(u.x, u.z, g.player.x, g.player.z) - u.radius;
+      if (u.broken && d < 8.5 && d < bestD) { best = u; bestD = d; }
+    }
+    return best;
+  }
+  const wreckUnit = (u) => { u.broken = true; u.hp = 0; u.model.rotation.z = 0.28; };
 
   // --- the vendors in town
   const vendorNearby = () => vendors.find((v) => dist(v.x, v.z, g.player.x, g.player.z) < 6);
@@ -442,7 +451,7 @@ export function createBusiness(g) {
 
   function hint() {
     const p = g.player, wreck = brokenNearby();
-    if (wreck) return `[E] mend the ${wreck.name} · $${repairCost(wreck)}`;
+    if (wreck) return `[E] mend the ${wreck.name} · $${repairCost(wreck)}${stock.money < repairCost(wreck) ? ` (you have $${Math.floor(stock.money)})` : ''}`;
     if (canKnit()) return p.knitting ? 'Knitting…' : 'Hold [E] to knit a Thneed';
     if (canTake()) return '[E] take Thneeds to sell';
     if (atStall() && p.thneeds > 0) return demand > 0 ? 'Hold [E] to sell' : 'The town has all the Thneeds it wants for now';
@@ -461,7 +470,7 @@ export function createBusiness(g) {
         g.ui.pop(`−$${repairCost(wreck).toFixed(2)}`, true);
         g.audio.purchase();
         wreck.broken = false; wreck.hp = wreck.maxHp; wreck.model.rotation.z = 0;
-      }
+      } else g.ui.tip(`It takes $${repairCost(wreck)} to mend the ${wreck.name}. You have $${Math.floor(stock.money)}.`, 5);
       return;
     }
     if (held && canKnit()) {
@@ -526,6 +535,9 @@ export function createBusiness(g) {
     update, use, hint, buy, price, owned, units, damage, scare, onTreeDown, pickups, people, gear, buyGear, applyGear, drink, vendorNearby, hackers,
     gearItems: () => { const v = vendorNearby(); return GEAR.filter((item) => v && item.vendor === v.id).map((item) => ({ ...item, price: gearPrice(item.id), owned: gear[item.id] })); },
     items: () => ITEMS.map((item) => ({ ...item, name: item.id === 'factory' && owned.factory ? 'Bigger the factory' : item.name, price: price(item.id), owned: owned[item.id] })),
+    // For saved games: which machines are wrecked, as [kind, which of that kind].
+    wrecks: () => units.filter((u) => u.broken).map((u) => [u.kind, units.filter((o) => o.kind === u.kind).indexOf(u)]),
+    setWrecks(list = []) { for (const [kind, n] of list) { const u = units.filter((o) => o.kind === kind)[n]; if (u) wreckUnit(u); } },
     smog: () => owned.factory / 4,
     demand: () => demand,
     places: { stool, counter, stallCounter, townCentre, vendors },
