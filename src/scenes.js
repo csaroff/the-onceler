@@ -3,14 +3,14 @@ import * as THREE from 'three';
 import * as barbaloot from './art/barbaloot.js';
 import * as swanArt from './art/swan.js';
 import * as fishArt from './art/fish.js';
-import { height, dist, NOMANS } from './terrain.js';
+import { height, dist } from './terrain.js';
 
+// The same animals that were in the line, going home.
 const MARCH = {
   loot: { art: barbaloot, variant: 'crummy', pose: 'march', speed: 1.4, gap: 2.3, name: 'Bar-ba-loots' },
-  swan: { art: swanArt, variant: 'smogged', pose: 'fly', speed: 6, gap: 5, name: 'Swomee-Swans', flies: true },
-  fish: { art: fishArt, variant: 'gummed', pose: 'walk', speed: 1.1, gap: 2, name: 'Humming-Fish' },
+  swan: { art: swanArt, variant: 'happy', pose: 'fly', speed: 6, gap: 5, name: 'Swomee-Swans', flies: true },
+  fish: { art: fishArt, variant: 'enraged', pose: 'walk', speed: 1.1, gap: 2, name: 'Humming-Fish' },
 };
-const HILL = { x: -120, z: -150 }; // the hill beside no-man's-land, where he stands to see them off
 
 export function createScenes(g) {
   const scenes = { active: null, queue: [], t: 0 };
@@ -21,7 +21,7 @@ export function createScenes(g) {
     // The first tree is down. Out of its stump, up close, for the only time.
     firstTree(tree) {
       let spoke = false;
-      const p = g.player;
+      const p = g.player, tall = lorax().model.userData.height || 1;
       return {
         start() {
           const l = lorax();
@@ -37,10 +37,10 @@ export function createScenes(g) {
         update(t) {
           // Crouch the camera three metres from the stump, on your side of it: close enough to count his eyelashes.
           const dx = p.x - tree.x, dz = p.z - tree.z, d = Math.hypot(dx, dz) || 1;
-          eye.set(tree.x + (dx / d) * 3.1, 0, tree.z + (dz / d) * 3.1);
+          eye.set(tree.x + (dx / d) * (2.4 + tall * 0.7), 0, tree.z + (dz / d) * (2.4 + tall * 0.7));
           eye.y = height(eye.x, eye.z) + 1.05;
           g.camera.position.copy(eye);
-          g.camera.lookAt(aim.set(tree.x, tree.y + 0.95, tree.z));
+          g.camera.lookAt(aim.set(tree.x, tree.y + 0.45 + tall * 0.55, tree.z));
           const l = lorax();
           if (t < 0.8) l.pose('emerge', 0);
           else if (t < 3.3) l.pose('emerge', (t - 0.8) / 2.5);
@@ -52,7 +52,7 @@ export function createScenes(g) {
         },
         end() {
           const l = lorax();
-          g.fx.burst(tree.x, tree.y + 1, tree.z, '#f6d43c', 10, 3, 0.5);
+          g.fx.burst(tree.x, tree.y + 1, tree.z, '#bfe9ff', 10, 3, 0.5);
           g.audio.pop();
           l.model.visible = false;
           l.state = 'hidden';
@@ -64,15 +64,15 @@ export function createScenes(g) {
       };
     },
 
-    // A lieutenant is beaten. The Lorax sends its kind away, and you watch them go.
-    march(kind) {
+    // A champion is beaten between the lines. The Lorax sends its kind away from here, and you watch them go.
+    march({ kind, field }) {
       const def = MARCH[kind], marchers = [];
-      // From no-man's-land, where you beat their lieutenant, across open ground to the hill.
-      const from = { x: NOMANS.x, z: NOMANS.z }, len = dist(from.x, from.z, HILL.x, HILL.z);
-      const dir = { x: (HILL.x - from.x) / len, z: (HILL.z - from.z) / len };
+      // From where the champion fell, back toward the ridge he is standing on.
+      const from = field.mid, to = field.ridge, len = dist(from.x, from.z, to.x, to.z);
+      const dir = { x: (to.x - from.x) / len, z: (to.z - from.z) / len };
       return {
         start() {
-          g.wildlife.sendOff(kind);
+          g.wildlife.sendOff(kind, field.x, field.z);
           g.ui.say(kind, 5.5);
           g.audio.dirge();
           for (let i = 0; i < 11; i++) {
@@ -84,8 +84,6 @@ export function createScenes(g) {
           const l = lorax();
           l.state = 'scene';
           l.model.visible = true;
-          l.model.scale.setScalar(4.5);
-          l.model.position.set(HILL.x, height(HILL.x, HILL.z), HILL.z);
           l.model.rotation.y = Math.atan2(-dir.x, -dir.z);
           g.camera.fov = 40;
           g.camera.updateProjectionMatrix();
@@ -108,51 +106,33 @@ export function createScenes(g) {
         },
         end() {
           for (const model of marchers) g.scene.remove(model);
-          const l = lorax();
-          l.model.visible = false;
-          l.state = 'hidden';
+          lorax().state = 'command'; // he is still on the ridge, and the rest of them are still in their line
           g.ui.fade(false);
-          g.ui.tip(`The ${def.name} are gone. It will be quiet for a while.`, 8);
+          g.ui.tip(`The ${def.name} are gone from here. The rest of his army is not.`, 8);
         },
       };
     },
 
-    // The last tree is down.
-    lift() {
+    // He is dead. Everything he raised goes down with him.
+    fall(king) {
       const p = g.player;
-      let at = null, said = 0;
+      let said = 0;
       return {
         start() {
-          const d = p.facing();
-          at = { x: p.x + d.x * 45, z: p.z + d.z * 45 };
-          const l = lorax();
-          l.state = 'scene';
-          l.model.visible = true;
-          l.model.scale.setScalar(2.5);
-          l.model.position.set(at.x, height(at.x, at.z), at.z);
-          l.model.rotation.y = Math.atan2(p.x - at.x, p.z - at.z);
-          g.camera.fov = 30;
+          g.camera.fov = 40;
           g.camera.updateProjectionMatrix();
-          g.war.end();
-          g.ui.say('lastTree', 4);
           g.audio.dirge();
         },
         update(t) {
-          g.camera.position.set(p.x, p.y + 1.7, p.z);
-          const rise = t > 5 ? Math.min(1, (t - 5) / 7) : 0;
-          g.camera.lookAt(aim.set(at.x, height(at.x, at.z) + 2.5 + rise * 9, at.z));
-          const l = lorax();
-          if (t < 5) l.pose('glare', t);
-          else if (t < 12.5) { if (said < 1) { said = 1; g.ui.say('lift', 4.5); } l.pose('lift', rise); }
-          else if (said < 2) { said = 2; l.model.visible = false; g.ui.say('unless', 7); }
-          if (t > 22 && said < 3) { said = 3; g.ui.say('seed', 6); }
-          return t > 35;
+          const dx = p.x - king.x, dz = p.z - king.z, d = Math.hypot(dx, dz) || 1;
+          const cx = king.x + (dx / d) * 11, cz = king.z + (dz / d) * 11;
+          g.camera.position.set(cx, height(cx, cz) + 2.2, cz);
+          g.camera.lookAt(aim.set(king.x, height(king.x, king.z) + 1.6, king.z));
+          if (t > 1 && said < 1) { said = 1; g.ui.say('glance', 4.5); }
+          if (t > 12 && said < 2) { said = 2; g.ui.say('unless', 6); }
+          return t > 20;
         },
-        end() {
-          lorax().state = 'hidden';
-          g.war.enabled = false;
-          p.hasSeed = true;
-        },
+        end() { g.onEnding(); },
       };
     },
   };

@@ -1,6 +1,5 @@
 // The Once-ler. You have an axe, and Thneeds sell for $3.98.
 import * as THREE from 'three';
-import * as truffula from './art/truffula.js';
 import { createInk } from './ink.js';
 import { createUI, dollars } from './ui.js';
 import { createAudio } from './audio.js';
@@ -14,7 +13,8 @@ import { createWar } from './war.js';
 import { createLorax } from './lorax.js';
 import { createDefences, DEFENCES } from './defences.js';
 import { createScenes } from './scenes.js';
-import { height, clamp, SHOP, TOWN } from './terrain.js';
+import { height, clamp, smooth, dist, SHOP, TOWN, THRONE, FACTORY } from './terrain.js';
+import * as land from './terrain.js';
 
 const testing = new URLSearchParams(location.search).has('test');
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -30,7 +30,7 @@ scene.add(camera);
 
 // Everything in the game hangs off this one object, so each part can reach the others.
 const g = {
-  scene, camera, time: 0, ruin: 0, started: false, ended: false,
+  scene, camera, time: 0, ruin: 0, started: false, ended: false, dead: false,
   stock: { money: 0, tufts: 0, thneeds: 0, sold: 0, made: 0 },
   story: { felled: 0, seen: new Set() },
 };
@@ -55,65 +55,81 @@ g.war = createWar(g);
 g.lorax = createLorax(g);
 g.defences = createDefences(g);
 g.scenes = createScenes(g);
+g.world.settle(g.player.x, g.player.z); // all the land round the shop, before the first picture
+g.wildlife.populate();
 
 g.onTreeFelled = (tree) => {
   g.story.felled++;
   g.war.onTreeFelled();
   if (g.story.flag('firstTree')) g.scenes.play('firstTree', tree);
-  if (g.world.standing().length === 0 && g.story.flag('lastTree')) g.scenes.play('lift');
 };
 
-g.onLieutenantBeaten = (kind) => {
-  if (kind === 'horror') g.ui.tip('The Biggerer is down. Nothing is left to send but more of the same.', 9);
-  else g.scenes.play('march', kind);
+// A champion fell between the lines: its kind is sent away from here, and you watch them go.
+g.onChampionBeaten = (kind, field) => g.scenes.play('march', { kind, field });
+g.onKingDead = (king) => g.scenes.play('fall', king);
+g.onEnding = () => {
+  g.ended = true;
+  g.ui.card(`<h1>The End</h1><p>${g.story.felled.toLocaleString()} Truffula Trees. ${g.stock.sold.toLocaleString()} Thneeds. ${dollars(g.stock.money)}.</p><p>Nobody speaks for the trees.</p><p style="font-size:20px;margin-top:20px">Click to carry on</p>`);
+  letGo();
 };
 
-// You wake up at the shop, lighter in the pocket. It happens at the start of the next step, not in the middle of a fight.
-let knockedOut = false;
-g.knockout = () => { knockedOut = true; };
+// Knocked out, you wake up at the shop, lighter in the pocket. Beaten by a champion between the lines, you do not wake up.
+// Either way it happens at the start of the next step, not in the middle of a fight.
+let knockedOut = false, fatal = false;
+g.knockout = () => { knockedOut = true; fatal = g.war.duel; };
 function comeRound() {
   knockedOut = false;
+  if (fatal) return die();
   const lost = Math.round(g.stock.money * 25) / 100;
   g.stock.money = Math.round((g.stock.money - lost) * 100) / 100;
   g.ui.fade(true);
   setTimeout(() => g.ui.fade(false), 1500);
-  Object.assign(g.player, { x: SHOP.x + 5, z: SHOP.z + 11, yaw: 0.42, pitch: 0, health: g.player.maxHealth, tufts: 0, thneeds: 0 });
+  Object.assign(g.player, { x: SHOP.x + 5, z: SHOP.z + 11, yaw: 0.42, pitch: 0, vy: 0, health: g.player.maxHealth, tufts: 0, thneeds: 0 });
   g.war.clear();
   g.ui.tip(lost > 0 ? `You came round at the shop. ${dollars(lost)} was gone.` : 'You came round at the shop.', 8);
+}
+function die() {
+  g.dead = true;
+  g.war.clear();
+  try { localStorage.removeItem(SAVE_KEY); } catch { /* nothing saved to remove */ }
+  g.ui.card(`<h1>Dead</h1><p>You went out between the lines, and you did not come back.</p><p>${g.story.felled.toLocaleString()} Truffula Trees. ${g.stock.sold.toLocaleString()} Thneeds. ${dollars(g.stock.money)}.</p><p style="font-size:20px;margin-top:20px">Click to start again</p>`);
+  letGo();
 }
 
 // ---------------------------------------------------------------- saved games
 
 // Everything needed to put the game back as it was. Whatever was attacking at the time is not kept.
 g.snapshot = () => ({
-  version: 1,
-  stock: { ...g.stock }, seen: [...g.story.seen], ruin: g.ruin, ended: g.ended,
-  felledTrees: g.world.trees.filter((t) => t.state !== 'standing').map((t) => t.id),
-  player: { x: g.player.x, z: g.player.z, yaw: g.player.yaw, tufts: g.player.tufts, thneeds: g.player.thneeds, hasSeed: g.player.hasSeed },
-  owned: { ...g.business.owned }, defences: g.defences.snapshot(), war: g.war.snapshot(), gone: { ...g.wildlife.gone },
+  version: 2,
+  stock: { ...g.stock }, seen: [...g.story.seen], felled: g.story.felled, ruin: g.ruin, ended: g.ended,
+  felledTrees: g.world.felled(),
+  player: { x: g.player.x, z: g.player.z, yaw: g.player.yaw, tufts: g.player.tufts, thneeds: g.player.thneeds },
+  owned: { ...g.business.owned }, gear: { ...g.business.gear }, defences: g.defences.snapshot(), war: g.war.snapshot(), emptied: g.wildlife.emptied,
 });
 
 // Apply a snapshot to a freshly started game.
 g.restore = (d) => {
+  if (d.version !== 2) throw new Error('saved by an older version of the game');
   for (const name of d.seen) g.story.seen.add(name); // first, so nothing below is announced a second time
   Object.assign(g.stock, d.stock);
-  for (const id of d.felledTrees) g.world.clear(g.world.trees[id]);
-  g.story.felled = d.felledTrees.length;
+  for (const id of d.felledTrees) g.world.clear(id);
+  g.story.felled = d.felled;
   g.ruin = d.ruin;
   g.ended = d.ended;
   for (const [id, count] of Object.entries(d.owned)) for (let i = 0; i < count; i++) g.business.buy(id, true);
+  for (const [id, count] of Object.entries(d.gear || {})) for (let i = 0; i < count; i++) g.business.buyGear(id, true);
   g.defences.restore(d.defences);
-  for (const kind of ['loot', 'swan', 'fish']) if (d.gone[kind]) g.wildlife.sendOff(kind);
+  g.wildlife.restore(d.emptied);
   g.war.restore(d.war);
   Object.assign(g.player, d.player);
-  // Saved while the very last tree was still falling: the ending has not played yet.
-  if (g.world.standing().length === 0 && g.story.flag('lastTree')) g.scenes.play('lift');
+  g.player.health = g.player.maxHealth;
+  g.world.settle(g.player.x, g.player.z);
 };
 
 const SAVE_KEY = 'the-onceler-save';
 let hasSave = false, lastSave = 0;
 function save() {
-  if (testing || !g.started || g.scenes.active || g.scenes.queue.length) return; // never in the middle of a cutscene
+  if (testing || g.dead || !g.started || g.scenes.active || g.scenes.queue.length) return; // never in the middle of a cutscene
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(g.snapshot())); } catch { /* storage full or switched off: play on without saving */ }
 }
 if (!testing) {
@@ -133,22 +149,26 @@ if (!testing) {
 
 function goal() {
   const { stock, player, business, war, story } = g;
-  if (player.hasSeed) return 'Plant the last Truffula Seed: hold [E]';
-  if (g.ended) return '';
-  if (war.challenge) return 'A lieutenant waits in no-man’s-land, to the north-west';
+  if (g.ended || g.dead) return '';
+  if (war.finale) return 'Kill the Lorax';
+  if (war.phase === 'muster') return 'Fight their champion alone, or stand and take the charge';
+  if (war.phase === 'duel') return 'Beat the champion';
+  if (war.phase === 'fight') return 'Hold them off';
   if (!story.felled) return 'Chop down a Truffula Tree';
   if (!stock.made) {
     if (stock.tufts) return 'Knit a Thneed: hold [E] at the stool by your shop';
     return player.tufts ? 'Carry the tufts back to your shop' : 'Gather the tufts';
   }
-  if (!stock.sold) return player.thneeds ? 'Sell them in town: east along the road' : 'Take your Thneeds from the counter: [E]';
+  if (!stock.sold) return 'Passers-by buy from your counter. The town pays for cartloads: a long way east along the road';
   if (!business.owned.cart) return 'Earn $24 for a handcart: [B]';
   if (!business.owned.knitter) return 'Earn $50 and hire a relative: [B]';
   if (!business.owned.factory) return 'Earn $250 and build a Thneed Factory: [B]';
+  if (war.raid >= 1) return 'Bigger the business. Arm yourself in town. Then go north-west and kill the Lorax';
   return 'Bigger the business';
 }
 
-let menu = null; // 'business', 'defences' or nothing
+let menu = null; // 'business', 'defences', 'vendor' or nothing
+g.openMenu = (name) => { menu = name; g.defences.select(null); };
 function menuHtml() {
   if (menu === 'business') {
     return '<h3>Business</h3>' + g.business.items().map((item, i) => {
@@ -161,6 +181,14 @@ function menuHtml() {
       const cls = g.defences.placing === d ? 'sel' : g.stock.money < d.price ? 'off' : '';
       return `<div class="${cls}">[${i + 1}] ${d.name} · $${d.price} · ${d.blurb}</div>`;
     }).join('') + `<div>${g.defences.placing ? 'click to build · ' : ''}[V] close</div>`;
+  }
+  if (menu === 'vendor') {
+    const items = g.business.gearItems();
+    if (!items.length) { menu = null; return ''; } // walked away from the stall
+    return '<h3>For sale</h3>' + items.map((item, i) => {
+      const soldOut = item.price === Infinity, cls = soldOut || g.stock.money < item.price ? 'off' : '';
+      return `<div class="${cls}">[${i + 1}] ${item.name} · ${soldOut ? 'no better to be had' : `$${item.price}`} · ${item.blurb}${item.owned ? ` (${item.owned})` : ''}</div>`;
+    }).join('') + '<div>[Q] close</div>';
   }
   return '';
 }
@@ -178,9 +206,11 @@ function updateCompass() {
     if (Math.abs(rel) < 1.3) marks.push({ label, rel });
   }
   marks.push({ label: 'shop', rel: bearing(SHOP.x, SHOP.z), cls: 'place' }, { label: 'town', rel: bearing(TOWN.x, TOWN.z), cls: 'place' });
+  // Once you know where he rules from, the compass does too.
+  if (g.war.raid >= 1 && !g.war.won) marks.push({ label: 'his seat', rel: bearing(THRONE.x, THRONE.z), cls: 'place' });
   // While he is showing himself, the compass says which way to look.
-  if (g.lorax.state === 'watch') marks.push({ label: 'the Lorax', rel: bearing(g.lorax.x, g.lorax.z), cls: 'danger' });
-  if (g.war.challenge) marks.push({ label: 'lieutenant', rel: bearing(g.war.challenge.x, g.war.challenge.z), cls: 'danger' });
+  if (g.lorax.state === 'watch' || g.lorax.state === 'command') marks.push({ label: 'the Lorax', rel: bearing(g.lorax.x, g.lorax.z), cls: 'danger' });
+  if (g.war.champion) marks.push({ label: 'champion', rel: bearing(g.war.champion.x, g.war.champion.z), cls: 'danger' });
   // Two labels in the same direction would print on top of each other: lift the later one onto its own line.
   const named = marks.filter((m) => m.cls).sort((x, y) => x.rel - y.rel);
   named.forEach((m, i) => { if (i && Math.abs(m.rel - named[i - 1].rel) < 0.3 && !named[i - 1].cls.includes('up')) m.cls += ' up'; });
@@ -193,13 +223,16 @@ function updateScreen() {
   ui.money(stock.money);
   ui.goal(goal());
   const carrying = [player.tufts && `${player.tufts} tufts`, player.thneeds && `${player.thneeds} Thneeds`].filter(Boolean).join(', ');
-  ui.status(`${carrying ? `Carrying ${carrying}<br>` : ''}At the shop: ${stock.tufts} tufts, ${stock.thneeds} Thneeds<br>${world.trees.length - g.story.felled} Truffula Trees`);
-  ui.hint(g.scenes.active ? '' : g.defences.hint() || g.business.hint() || (player.hasSeed ? 'Hold [E] to plant the seed' : ''));
+  ui.status(`${carrying ? `Carrying ${carrying}<br>` : ''}At the shop: ${stock.tufts} tufts, ${stock.thneeds} Thneeds<br>${g.story.felled.toLocaleString()} trees felled`);
+  ui.hint(g.scenes.active ? '' : g.defences.hint() || g.business.hint());
   ui.menu(g.scenes.active ? '' : menuHtml());
   ui.health(player.health / player.maxHealth);
   const boss = war.bossBar();
   ui.boss(boss?.name, boss?.fraction);
-  ui.wave(war.underAttack() ? `${war.alive()} coming for you` : '');
+  const more = war.reserves > 0 && g.lorax.state === 'command' ? `, and ${war.reserves} more on the ridge` : '';
+  ui.wave(war.phase === 'muster' ? `${war.standing()} in their line. They will wait ${Math.ceil(war.truce)} s`
+    : war.phase === 'duel' ? `${war.standing()} watching from their line`
+    : war.underAttack() ? `${war.alive()} coming for you${more}` : '');
 }
 
 // ---------------------------------------------------------------- input
@@ -207,7 +240,7 @@ function updateScreen() {
 const keys = {}, pressed = new Set();
 // Pointer lock can be refused (no user gesture, embedded frame); the game still runs without mouse-look.
 const lockPointer = () => renderer.domElement.requestPointerLock()?.catch(() => {});
-const playing = () => g.started && !g.scenes.active;
+const playing = () => g.started && !g.scenes.active && !g.dead;
 
 addEventListener('keydown', (e) => {
   if (!keys[e.code]) pressed.add(e.code);
@@ -221,6 +254,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') g.player.fireSling();
   const digit = /^Digit([1-9])$/.exec(e.code);
   if (digit && menu === 'business') { const item = g.business.items()[digit[1] - 1]; if (item) g.business.buy(item.id); }
+  if (digit && menu === 'vendor') { const item = g.business.gearItems()[digit[1] - 1]; if (item) g.business.buyGear(item.id); }
   if (digit && menu === 'defences') { const d = DEFENCES[digit[1] - 1]; if (d) g.defences.select(d.id); }
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -252,7 +286,7 @@ document.getElementById('start').addEventListener('click', () => {
   g.audio.start();
   lockPointer();
 });
-document.getElementById('card').addEventListener('click', () => g.ui.card(''));
+document.getElementById('card').addEventListener('click', () => { if (g.dead) location.reload(); else g.ui.card(''); });
 
 addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -260,43 +294,25 @@ addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// ---------------------------------------------------------------- the ending
-
-let plant = 0, endTimer = 0;
-function updateSeed(dt) {
-  const p = g.player;
-  if (p.hasSeed && keys.KeyE && !g.business.hint()) {
-    plant += dt;
-    if (plant > 1.5) {
-      p.hasSeed = false;
-      g.ended = true;
-      const d = p.facing(), x = p.x + d.x * 2.5, z = p.z + d.z * 2.5;
-      const sapling = truffula.build({ kind: 'sapling' });
-      sapling.position.set(x, height(x, z), z);
-      scene.add(sapling);
-      g.audio.fanfare();
-      g.ui.say('plant', 6);
-      endTimer = 15;
-    }
-  } else plant = 0;
-  if (endTimer > 0) {
-    endTimer -= dt;
-    if (endTimer <= 0) {
-      g.ui.card(`<h1>The End</h1><p>${g.story.felled} Truffula Trees. ${g.stock.sold.toLocaleString()} Thneeds. ${dollars(g.stock.money)}.</p><p>One sapling.</p><p style="font-size:20px;margin-top:20px">Click to stay a while</p>`);
-      everLocked = false; // the end card lets the mouse go on purpose; that is not a pause
-      document.exitPointerLock?.();
-    }
-  }
-}
+// A card on the screen lets the mouse go on purpose; that is not a pause.
+function letGo() { everLocked = false; document.exitPointerLock?.(); }
 
 // ---------------------------------------------------------------- the loop
 
+let ruinTimer = 0, ruinTarget = 0;
 g.step = (dt) => {
   g.time += dt;
   if (knockedOut) comeRound();
-  // Ruin trails the real damage a little, so the world sours gradually rather than in jumps.
-  const target = clamp(g.story.felled / g.world.trees.length + g.business.smog() * 0.2, 0, 1);
-  g.ruin += clamp(target - g.ruin, -dt * 0.02, dt * 0.02);
+  if (g.dead) { g.ui.update(dt); return; }
+  // Ruin is local: the share of the trees round you that are down, plus the factory's smog near the factory. It trails
+  // the real damage, so the world sours as you fell it and clears again as you walk out into forest nobody has touched.
+  ruinTimer -= dt;
+  if (ruinTimer <= 0) {
+    ruinTimer = 0.5;
+    const smog = g.business.smog() * 0.45 * (1 - smooth(150, 600, dist(g.player.x, g.player.z, FACTORY.x, FACTORY.z)));
+    ruinTarget = clamp(g.world.ruinNear(g.player.x, g.player.z, 90) * 0.9 + smog, 0, 1);
+  }
+  g.ruin += clamp(ruinTarget - g.ruin, -dt * 0.05, dt * 0.05);
 
   g.scenes.update(dt);
   if (g.scenes.active) {
@@ -305,7 +321,6 @@ g.step = (dt) => {
     g.player.update(dt, keys);
     if (pressed.has('KeyE') && g.defences.use()) pressed.delete('KeyE');
     g.business.use(dt, !!keys.KeyE, pressed.has('KeyE'));
-    updateSeed(dt);
   } else {
     // Title screen: a slow look around from the road.
     camera.position.set(SHOP.x + 5, height(5, 11) + 1.7, SHOP.z + 11);
@@ -319,10 +334,11 @@ g.step = (dt) => {
   g.lorax.update(dt);
   g.defences.update(dt);
   g.world.setRuin(g.ruin);
-  g.world.update(dt, g.time);
+  g.world.update(dt, g.time, g.player.x, g.player.z);
   g.fx.update(dt);
   // While he is watching, the birds stop singing and the music stops with them.
-  const watched = g.lorax.state === 'watch', fighting = g.war.underAttack() || g.war.duel;
+  // The same hush falls while an army stands in its line, waiting.
+  const watched = g.lorax.state === 'watch' || g.war.phase === 'muster', fighting = g.war.underAttack() || g.war.duel;
   const mood = g.ended ? 'hope' : watched ? 'watched' : fighting ? 'fight' : g.scenes.active ? 'quiet' : 'calm';
   g.audio.update(dt, g.ruin, watched ? 0 : g.wildlife.birds(), mood);
   g.ui.update(dt);
@@ -348,6 +364,7 @@ if (!testing) {
 }
 // For poking at the game from the console, and for the scenario tests.
 g.renderMusic = renderMusic;
+g.land = land;
 g.keys = keys;
 g.pressed = pressed;
 window.game = g;

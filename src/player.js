@@ -1,8 +1,9 @@
 // You: a pair of long green arms, an axe, a sling, and whatever you can carry.
 import * as handsArt from './art/hands.js';
-import { height, WORLD_RADIUS } from './terrain.js';
+import { height, steepness, STEEP, LAKE_Y } from './terrain.js';
 
-const EYE = 1.7, WALK = 6.5, RUN = 11.5, REACH = 4.6, SWING_SECONDS = 0.55, SLING_SECONDS = 0.6;
+const EYE = 1.7, WALK = 6.5, RUN = 11.5, BACKWARDS = 0.5, REACH = 4.6, SWING_SECONDS = 0.55, SLING_SECONDS = 0.6;
+const SAFE_FALL = 13; // metres a second you can land at without being hurt: a drop of about three and a half metres
 
 export function createPlayer(g) {
   const hands = handsArt.build();
@@ -12,9 +13,10 @@ export function createPlayer(g) {
   const p = {
     x: 5, z: 11, y: 0, vy: 0, yaw: 0.42, pitch: 0, // standing on the road, looking at the shop
     health: 10, maxHealth: 10, lastHurt: -99, hurt: 0,
+    axe: 2, slingDamage: 1, slingRest: 0.85, // what a blow and a slung rock do; better ones are sold in town
     tufts: 0, thneeds: 0, maxTufts: 4, maxThneeds: 6,
     swing: 0, struck: true, sling: 0, shot: true, slingCooldown: 0,
-    knitting: false, knit: 0, offering: 0, moving: 0, hasSeed: false, hands,
+    knitting: false, knit: 0, offering: 0, moving: 0, grounded: true, hands,
   };
 
   // Which way you are facing, flat along the ground.
@@ -31,7 +33,7 @@ export function createPlayer(g) {
     if (p.slingCooldown > 0 || p.swing > 0) return;
     p.sling = SLING_SECONDS;
     p.shot = false;
-    p.slingCooldown = 0.85;
+    p.slingCooldown = p.slingRest;
   };
 
   // The axe lands. Anything hostile in reach takes it; otherwise the tree in front of you does.
@@ -39,7 +41,7 @@ export function createPlayer(g) {
     const dir = p.facing();
     if (g.war.strike(p.x, p.z, dir)) return;
     let target = null, best = REACH;
-    for (const tree of g.world.trees) {
+    for (const tree of g.world.treesNear(p.x, p.z, REACH)) {
       if (tree.state !== 'standing') continue;
       const dx = tree.x - p.x, dz = tree.z - p.z, d = Math.hypot(dx, dz);
       if (d < best && (dx * dir.x + dz * dir.z) / d > 0.55) { target = tree; best = d; }
@@ -48,7 +50,7 @@ export function createPlayer(g) {
     g.audio.chop();
     g.fx.burst(target.x, target.y + 1.2, target.z, '#fff3b8', 6, 3, 0.2);
     target.hp--;
-    target.shake = 0.3;
+    g.world.shake(target);
     if (target.hp <= 0) { g.world.fell(target, p.x, p.z); g.wildlife.startle(target.x, target.z); }
   }
 
@@ -62,25 +64,47 @@ export function createPlayer(g) {
     if (p.health <= 0) g.knockout();
   };
 
+  // Can you take this step? Not up a cliff, and not out into deep water.
+  function open(nx, nz) {
+    const here = height(p.x, p.z), dx = nx - p.x, dz = nz - p.z, d = Math.hypot(dx, dz) || 1;
+    const ahead = height(p.x + (dx / d) * 0.8, p.z + (dz / d) * 0.8);
+    if (ahead < LAKE_Y - 1.3) return false;
+    if (!p.grounded) return height(nx, nz) <= p.y + 0.3; // in the air you cannot move into ground above your feet
+    return ahead - here <= STEEP * 0.8;
+  }
+
   p.update = (dt, keys) => {
     const forward = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), strafe = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     const len = Math.hypot(forward, strafe);
     p.moving = 0;
-    if (len && !p.knitting) {
-      const loaded = p.tufts >= p.maxTufts || p.thneeds >= p.maxThneeds;
-      const speed = (keys.ShiftLeft || keys.ShiftRight ? RUN : WALK) * (loaded ? 0.85 : 1);
-      const dir = p.facing();
-      p.x += ((dir.x * forward - dir.z * strafe) / len) * speed * dt;
-      p.z += ((dir.z * forward + dir.x * strafe) / len) * speed * dt;
+    // Standing on a face too steep to stand on, you slide down it, and cannot jump your way up it.
+    const sliding = p.grounded && steepness(p.x, p.z) > STEEP;
+    if (sliding) {
+      const gx = height(p.x + 1, p.z) - height(p.x - 1, p.z), gz = height(p.x, p.z + 1) - height(p.x, p.z - 1), gl = Math.hypot(gx, gz) || 1;
+      p.x -= (gx / gl) * 9 * dt; p.z -= (gz / gl) * 9 * dt;
+    } else if (len && !p.knitting) {
+      const loaded = p.tufts >= p.maxTufts || p.thneeds >= p.maxThneeds, wading = height(p.x, p.z) < LAKE_Y - 0.3;
+      // Walking backwards is slow and cannot be hurried: you cannot outrun what is chasing you while facing it.
+      const pace = forward < 0 ? WALK * BACKWARDS : keys.ShiftLeft || keys.ShiftRight ? RUN : WALK;
+      const speed = pace * (loaded ? 0.85 : 1) * (wading ? 0.5 : 1), dir = p.facing();
+      const mx = ((dir.x * forward - dir.z * strafe) / len) * speed * dt, mz = ((dir.z * forward + dir.x * strafe) / len) * speed * dt;
+      // Blocked straight ahead: slide along whichever way is open.
+      if (open(p.x + mx, p.z + mz)) { p.x += mx; p.z += mz; }
+      else if (open(p.x + mx, p.z)) p.x += mx;
+      else if (open(p.x, p.z + mz)) p.z += mz;
       p.moving = speed / RUN;
     }
-    const out = Math.hypot(p.x, p.z);
-    if (out > WORLD_RADIUS) { p.x *= WORLD_RADIUS / out; p.z *= WORLD_RADIUS / out; }
 
     const ground = height(p.x, p.z);
     p.vy -= 25 * dt;
     p.y += p.vy * dt;
-    if (p.y <= ground) { p.y = ground; p.vy = keys.Space && !p.knitting ? 8 : 0; }
+    if (p.y <= ground) {
+      // Coming down hard hurts: walk off a cliff and you may not get up.
+      if (p.vy < -SAFE_FALL) p.damage((-p.vy - SAFE_FALL) * 0.6);
+      p.y = ground;
+      p.vy = keys.Space && !p.knitting && !sliding ? 8 : 0;
+      p.grounded = p.vy === 0;
+    } else p.grounded = p.y - ground < 0.25 && p.vy <= 0;
 
     if (p.swing > 0) {
       p.swing = Math.max(0, p.swing - dt);

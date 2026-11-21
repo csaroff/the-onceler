@@ -17,7 +17,19 @@ const VARIANTS = {
     scale: 2.6, body: '#6b6d3a', belly: '#9d9662', fin: '#3f4a25', lips: '#5a3a2e', eye: '#f2d23c',
     lids: 0.55, scowl: 1, gloop: 12, teeth: true, weed: true,
   },
+  // The same happy fish, driven into a rage: same colours and size, but scowling, red-eyed, fins bristling, mouth
+  // open in a snarl of little teeth, walking upright on its fins.
+  enraged: {
+    scale: 1, body: PALETTE.fish, belly: '#ffe08a', fin: '#ff7a3c', lips: '#ff5f7a', eye: PALETTE.white,
+    lids: 0.15, scowl: 0, gloop: 0, teeth: false, weed: false, angry: true, rim: '#e0303a',
+  },
+  // A big old enraged one, 2.5 m tall: same colours, torn fins, scars, a chipped grin.
+  champion: {
+    scale: 3.2, body: PALETTE.fish, belly: '#ffe08a', fin: '#ff7a3c', lips: '#ff5f7a', eye: PALETTE.white,
+    lids: 0.2, scowl: 0, gloop: 0, teeth: false, weed: false, angry: true, rim: '#e0303a', scars: true,
+  },
 };
+const SCAR = '#ffd9c2'; // pale old welts on the champion
 const GLOOP = '#9bbf3a', WEED = '#3f7a2e';
 
 // ---------- small geometry helpers ----------
@@ -65,6 +77,15 @@ const flats = new Map();
 const flatMat = (c) => flats.get(c) || flats.set(c, flat(c)).get(c);
 
 // ---------- parts ----------
+// The body's round cross-section radius at a point along its length (before the side squash), for laying things on it.
+const BODY_PROFILE = [[0, -0.3], [0.05, -0.27], [0.09, -0.2], [0.14, -0.1], [0.18, 0.02], [0.19, 0.1], [0.17, 0.18], [0.12, 0.25], [0.06, 0.285], [0, 0.29]];
+function bodyRadius(z) {
+  for (let i = 1; i < BODY_PROFILE.length; i++) {
+    const [r0, z0] = BODY_PROFILE[i - 1], [r1, z1] = BODY_PROFILE[i];
+    if (z <= z1) return r0 + (r1 - r0) * (z - z0) / (z1 - z0);
+  }
+  return 0;
+}
 // The fat body: a plump teardrop, nose at +z, fat in the front third, tapering to the tail at -z, with a saggy belly.
 function bodyGeometry() {
   const g = lathe([[0, -0.3], [0.05, -0.27], [0.09, -0.2], [0.14, -0.1], [0.18, 0.02], [0.19, 0.1], [0.17, 0.18], [0.12, 0.25], [0.06, 0.285], [0, 0.29]], 12)
@@ -85,6 +106,41 @@ function dorsalShape() {
   s.quadraticCurveTo(0.1, -0.17, 0.05, -0.17);
   s.quadraticCurveTo(0.03, -0.21, -0.03, -0.2);
   s.lineTo(-0.03, 0.1);
+  return s;
+}
+// The dorsal fin raised in anger: the same sail, but its spines stand up stiff and spiky past the edge, like hackles.
+// The champion's has a bite torn out of it.
+function spikyDorsalShape(torn) {
+  const s = new THREE.Shape();
+  s.moveTo(-0.03, 0.1);
+  s.lineTo(0.2, 0.09);    // first spine, tall, raked forward
+  s.lineTo(0.12, 0.04);
+  s.lineTo(0.3, 0.0);     // the tallest spine
+  s.lineTo(0.17, -0.04);
+  if (torn) { s.lineTo(0.12, -0.06); s.lineTo(0.16, -0.09); s.lineTo(0.1, -0.1); } // a bite torn out
+  else { s.lineTo(0.27, -0.09); s.lineTo(0.14, -0.11); }
+  s.lineTo(0.2, -0.17);
+  s.lineTo(0.06, -0.16);
+  s.lineTo(0.08, -0.22);
+  s.lineTo(-0.03, -0.2);
+  s.lineTo(-0.03, 0.1);
+  return s;
+}
+// The champion's tail: the same curly fan with a ragged notch torn in one lobe.
+function tornTailShape() {
+  const s = new THREE.Shape();
+  s.moveTo(0.03, 0);
+  s.quadraticCurveTo(0.12, -0.02, 0.17, -0.13);
+  s.lineTo(0.12, -0.15); s.lineTo(0.16, -0.19); s.lineTo(0.1, -0.2); // the notch
+  s.quadraticCurveTo(0.08, -0.24, 0.1, -0.18);
+  s.quadraticCurveTo(0.13, -0.14, 0.09, -0.12);
+  s.quadraticCurveTo(0.03, -0.12, 0.0, -0.15);
+  s.quadraticCurveTo(-0.03, -0.12, -0.09, -0.12);
+  s.quadraticCurveTo(-0.13, -0.14, -0.1, -0.18);
+  s.quadraticCurveTo(-0.08, -0.24, -0.13, -0.24);
+  s.quadraticCurveTo(-0.2, -0.22, -0.17, -0.13);
+  s.quadraticCurveTo(-0.12, -0.02, -0.03, 0);
+  s.lineTo(0.03, 0);
   return s;
 }
 // A curly tail: a broad fan whose two lobes roll over into curls.
@@ -131,6 +187,18 @@ function buildKit(name) {
     body.push(shaped(tinyBall, [0.03, 0.11, 0.05], [0.15, side * 0.4, 0], [side * 0.135, 0.02, 0.12]));
   }
   kit.body = merge(body);
+  if (V.scars) {
+    // Old fight scars: pale welts across the flanks and one over the crown.
+    // Each welt is a flat stripe laid on the flank; bodyRadius finds the skin there.
+    const scars = [[1, 0.05, 0.02, 0.7], [-1, 0.02, 0.1, -0.5], [1, -0.04, -0.1, 0.3]].map(([side, y, z, tilt]) => {
+      const R = bodyRadius(z) * 0.82, x = side * Math.sqrt(Math.max(0, R * R - y * y)) * 0.97;
+      return shaped(tinyBall, [0.01, 0.02, 0.085], [tilt, side * Math.atan2(z * 0.4, 1), 0], [x, y, z]);
+    });
+    kit.scars = merge(scars);
+    // ...and a slash down across the right eye (in face space, so it stays on the eye), stitched in black.
+    kit.faceScar = shaped(tinyBall, [0.011, 0.075, 0.01], [0, 0, 0.4], [0.055, 0.0, 0.045]);
+    kit.stitches = merge([-1, 0, 1].map((k) => shaped(tinyBall, [0.02, 0.0045, 0.006], [0, 0, 0.4], [0.055 - k * 0.024 * Math.sin(0.4), k * 0.024 * Math.cos(0.4), 0.054])));
+  }
   // A pale belly patch.
   kit.belly = merge([shaped(tinyBall, [0.1, 0.1, 0.2], [0, 0, 0], [0, -0.13, 0.04])]);
 
@@ -142,6 +210,24 @@ function buildKit(name) {
   };
   kit.lips = merge([lip(1), lip(-1).translate(0, 0, -0.004), shaped(tinyBall, [0.08, 0.065, 0.06], [0, 0, 0], [0, 0, -0.03])]);
   kit.mouth = shaped(crumb, [0.026, 0.02, 0.02], [0, 0, 0], [0, 0, 0.042]);
+  if (V.angry) {
+    // The same fat lips, but pulled back into a snarl: a wide open mouth, dark inside, with a row of little teeth top
+    // and bottom. The lower lip and its teeth hinge open on the jaw.
+    const snarl = (up) => deform(new THREE.TorusGeometry(0.075, 0.03, 5, 8, Math.PI).rotateZ(up > 0 ? 0 : Math.PI),
+      (v) => { v.y = v.y * (up > 0 ? 0.55 : 0.75); v.z += 0.02 * (1 - Math.abs(v.x) / 0.1); });
+    kit.lips = merge([snarl(1).translate(0, 0.01, 0), shaped(tinyBall, [0.09, 0.07, 0.06], [0, 0, 0], [0, 0.0, -0.035])]);
+    kit.lowerLip = merge([snarl(-1)]);
+    kit.mouth = shaped(tinyBall, [0.07, 0.05, 0.02], [0, 0, 0], [0, -0.01, 0.02]);
+    const top = [], bottom = [];
+    for (let i = 0; i < 6; i++) {
+      const x = (i / 5 - 0.5) * 0.1, chip = V.scars && i === 2;
+      // Little triangular teeth: the champion's are crooked and one is snapped off.
+      top.push(shaped(new THREE.ConeGeometry(0.013, chip ? 0.012 : 0.03, 3, 1, true), [1, 1, 0.7], [0, 0, Math.PI + (V.scars ? rand(-0.3, 0.3) : 0)], [x, 0.0, 0.04 - Math.abs(x) * 0.3]));
+      if (i > 0 && i < 5) bottom.push(shaped(new THREE.ConeGeometry(0.012, 0.026, 3, 1, true), [1, 1, 0.7], [0, 0, V.scars ? rand(-0.3, 0.3) : 0], [x, -0.005, 0.035 - Math.abs(x) * 0.3]));
+    }
+    kit.teeth = merge(top);
+    kit.lowTeeth = merge(bottom);
+  }
   if (V.teeth) {
     const teeth = [];
     for (let i = 0; i < 7; i++) {
@@ -152,25 +238,34 @@ function buildKit(name) {
   }
 
   // Eyes: round, close together, high on the head, with heavy lids (scowling ones slant down to the middle).
-  const whites = [], pupils = [], lids = [];
+  const whites = [], pupils = [], lids = [], rims = [];
   for (const side of [1, -1]) {
     whites.push(shaped(eyeBall, [0.05, 0.066, 0.038], [0, side * 0.3, 0], [side * 0.052, 0, 0]));
-    pupils.push(shaped(crumb, [0.02, 0.026, 0.012], [0, side * 0.15, 0], [side * 0.046, -0.01, 0.036]));
+    // Furious eyes: pin-prick pupils inside a sore red rim.
+    const pin = V.angry ? 0.55 : 1;
+    pupils.push(shaped(crumb, [0.02 * pin, 0.026 * pin, 0.012], [0, side * 0.15, 0], [side * 0.046, -0.006, 0.037]));
+    if (V.rim) rims.push(shaped(crumb, [0.064, 0.082, 0.03], [0, side * 0.3, 0], [side * 0.052, -0.004, -0.002]));
     // The lid is a cap over the top of the eye; the scowling ones slant it down toward the middle.
-    lids.push(shaped(eyeBall, [0.058, 0.032 + V.lids * 0.022, 0.046], [0.5, side * 0.3, -side * (0.12 + 0.45 * V.scowl)], [side * 0.052, 0.056 - V.lids * 0.022, -0.006]));
+    const scowl = V.angry ? 0 : V.scowl;
+    lids.push(shaped(eyeBall, [0.058, 0.032 + V.lids * 0.022, 0.046], [0.5, side * 0.3, -side * (0.12 + 0.45 * scowl)], [side * 0.052, 0.056 - V.lids * 0.022, -0.006]));
   }
   kit.whites = merge(whites);
   kit.pupils = merge(pupils);
   kit.lids = merge(lids);
+  if (rims.length) kit.rims = merge(rims);
+  if (V.angry) {
+    // Thick black brows slammed down into a V, their inner ends meeting low between the eyes.
+    kit.brows = merge([1, -1].map((side) => shaped(crumb, [0.06, 0.014, 0.02], [0.3, side * 0.3, side * 0.6], [side * 0.05, 0.05, 0.04])));
+  }
   // Scowling brows for the gummed ones.
-  if (V.scowl) {
+  if (V.scowl && !V.angry) {
     kit.brows = merge([1, -1].map((side) => shaped(horn(0.08, 0.014, 0, 5), [1, 1, 1.4], [0.2, side * 0.3, side * (Math.PI / 2 + 0.45)], [side * 0.088, 0.072, 0.03])));
   }
 
-  kit.dorsal = sail(dorsalShape(), 0.024);
+  kit.dorsal = sail(V.angry ? spikyDorsalShape(V.scars) : dorsalShape(), 0.024);
   // The tail fan, its two lobes curling, with a slight twist so it isn't flat.
-  kit.tail = deform(sail(tailShape(), 0.026), (v) => { v.x += 0.6 * v.z * v.y; });
-  kit.legFin = deform(card(legFinShape(), 0.026).rotateY(Math.PI / 2), (v) => { v.z += 0.6 * v.y * v.y; });
+  kit.tail = deform(sail(V.scars ? tornTailShape() : tailShape(), 0.026), (v) => { v.x += 0.6 * v.z * v.y; });
+  kit.legFin = deform(card(legFinShape(), 0.045).rotateY(Math.PI / 2), (v) => { v.z += 0.6 * v.y * v.y; });
 
   // Dripping gloop for the gummed ones: green dribbles hanging off gills, lips and belly.
   if (V.gloop) {
@@ -217,6 +312,7 @@ export function build({ variant = 'happy', kind, lift = 0 } = {}) {
   const body = new THREE.Group();
   rig.add(body);
   body.add(M(kit.body, V.body), M(kit.belly, V.belly));
+  if (kit.scars) body.add(M(kit.scars, SCAR));
   if (kit.gloop) body.add(M(kit.gloop, GLOOP));
   if (kit.weed) body.add(M(kit.weed, WEED));
 
@@ -226,14 +322,22 @@ export function build({ variant = 'happy', kind, lift = 0 } = {}) {
   lips.add(M(kit.lips, V.lips), new THREE.Mesh(kit.mouth, flatMat(PALETTE.ink)));
   if (kit.teeth) lips.add(M(kit.teeth, PALETTE.paper));
   body.add(lips);
+  // The angry ones' lower lip hinges open on a jaw.
+  const jaw = new THREE.Group();
+  if (kit.lowerLip) {
+    jaw.add(M(kit.lowerLip, V.lips), M(kit.lowTeeth, PALETTE.paper));
+    lips.add(jaw);
+  }
   const face = new THREE.Group();
   face.position.set(0, 0.165, 0.15);
   body.add(face);
   const eyes = new THREE.Group();
   face.add(eyes);
+  if (kit.rims) eyes.add(new THREE.Mesh(kit.rims, flatMat(V.rim)));
   eyes.add(new THREE.Mesh(kit.whites, flatMat(V.eye)), new THREE.Mesh(kit.pupils, flatMat(PALETTE.ink)));
   face.add(M(kit.lids, V.body));
   if (kit.brows) face.add(M(kit.brows, PALETTE.ink));
+  if (kit.faceScar) face.add(M(kit.faceScar, SCAR), M(kit.stitches, PALETTE.ink));
 
   const dorsal = M(kit.dorsal, V.fin);
   dorsal.position.set(0, 0.13, 0.02);
@@ -256,8 +360,8 @@ export function build({ variant = 'happy', kind, lift = 0 } = {}) {
     return shoulder;
   });
 
-  root.userData.fish = { name, V, rig, body, lips, face, eyes, dorsal, tail, fins };
-  pose(root, 'swim', 0);
+  root.userData.fish = { name, V, rig, body, lips, jaw, face, eyes, dorsal, tail, fins };
+  pose(root, name === 'happy' ? 'swim' : 'walk', 0);
   return root;
 }
 
@@ -268,12 +372,16 @@ const clamp01 = (x) => Math.min(1, Math.max(0, x));
 const UPRIGHT_HEIGHT = 0.27;
 const UPRIGHT = -0.6; // how far it tips back onto its tail to stand
 
-// Sets the whole pose from scratch. swim/hum/walk: t in seconds. leap/attack/hurt/dead: t 0..1.
+// Sets the whole pose from scratch. swim/hum/walk/taunt: t in seconds. leap/attack/hurt/dead: t 0..1.
+// The enraged and champion fish snarl in every pose and scream (`taunt`) instead of humming.
 export function pose(model, name, t = 0, amount = 0) {
   const f = model.userData.fish;
   if (!f) return;
-  const { rig, body, lips, face, eyes, tail, dorsal, fins } = f;
-  if (!['swim', 'leap', 'hum', 'walk', 'attack', 'hurt', 'dead'].includes(name)) name = f.name === 'happy' ? 'swim' : 'walk';
+  const { rig, body, lips, jaw, face, eyes, tail, dorsal, fins } = f;
+  const angry = !!f.V.angry;
+  if (!['swim', 'leap', 'hum', 'walk', 'attack', 'hurt', 'dead', 'taunt'].includes(name)) name = f.name === 'happy' ? 'swim' : 'walk';
+  // A furious fish doesn't hum; it screams.
+  if (angry && name === 'hum') name = 'taunt';
 
   rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0, 'YXZ');
   body.position.set(0, 0, 0); body.rotation.set(0, 0, 0);
@@ -285,6 +393,8 @@ export function pose(model, name, t = 0, amount = 0) {
   face.rotation.set(0, 0, 0);
   face.position.set(0, 0.165, 0.15);
   let squint = 1, finSwing = 0, finOut = 0.3, finFwd = 0;
+  // How far the snarling mouth gapes (angry ones only), and how far the dorsal spines stand up.
+  let gape = angry ? 0.35 : 0, bristle = angry ? 1 : 0;
   const blink = (time) => ((time + 1.3) % 3.3 < 0.12 ? 0.12 : 1);
 
   if (name === 'swim') {
@@ -316,7 +426,7 @@ export function pose(model, name, t = 0, amount = 0) {
     lips.scale.set(1 + 0.1 * Math.sin(t * 18), 1 + 0.1 * Math.sin(t * 18), 1 + 0.25 * Math.abs(Math.sin(t * 3)));
     finOut = 0.9 + 0.3 * Math.sin(t * 3); finFwd = 0.2 * Math.sin(t * 3);
     squint = 0.14;
-  } else if (name === 'walk' || name === 'attack' || name === 'hurt' || name === 'dead') {
+  } else if (name === 'walk' || name === 'attack' || name === 'hurt' || name === 'dead' || name === 'taunt') {
     // On land: tipped up on its tail, standing on its two front fins.
     rig.position.y = UPRIGHT_HEIGHT;
     rig.rotation.x = UPRIGHT;
@@ -339,13 +449,30 @@ export function pose(model, name, t = 0, amount = 0) {
       finSwing = 0.55 * Math.sin(ph);
       tail.rotation.y = 0.25 * Math.sin(ph);
       if (f.name === 'happy') squint = 0.9;
+      if (angry) { squint = 1; gape = 0.3 + 0.12 * Math.abs(Math.sin(ph)); rig.rotation.x += 0.12; }
+    } else if (name === 'taunt') {
+      // Rears up tall on the tip of its tail, flings both fins wide, and screams; each scream throws the head forward.
+      const scream = Math.max(0, Math.sin(t * Math.PI * 2 * 0.9));
+      // Rocks back on its tail between screams, then throws its weight forward into each one.
+      rig.rotation.x = UPRIGHT - 0.3 + 0.35 * scream;
+      rig.position.y = UPRIGHT_HEIGHT + 0.07 + 0.02 * scream;
+      tail.rotation.x = 0.8;
+      rig.rotation.z = 0.04 * Math.sin(t * 21) * scream; // shaking with rage
+      // Fins thrown up over its head like two shaken fists.
+      finOut = 2.1 + 0.2 * scream + 0.06 * Math.sin(t * 19);
+      finFwd = 0.5;
+      tail.rotation.y = 0.2 * Math.sin(t * 11);
+      gape = 0.5 + 0.6 * scream;
+      lips.scale.set(1 + 0.15 * scream, 1 + 0.2 * scream, 1);
+      squint = 1;
     } else if (name === 'attack') {
       // Rears back, then lunges forward with the mouth wide at t = 0.5, then recovers.
       const back = Math.sin(Math.PI * clamp01(t / 0.45)) * (t < 0.45 ? 1 : 0);
       const lunge = Math.sin(Math.PI * clamp01((t - 0.35) / 0.4));
       rig.rotation.x += -0.35 * back + 0.45 * lunge; // rear up and back, then pitch forward mouth-first
       rig.position.z = -0.1 * back + 0.25 * lunge;
-      lips.scale.set(1 + 0.6 * lunge, 1 + 0.9 * lunge, 1 + 0.4 * lunge);
+      if (angry) { gape = 0.3 + 0.9 * lunge; lips.scale.set(1 + 0.2 * lunge, 1 + 0.2 * lunge, 1 + 0.2 * lunge); }
+      else lips.scale.set(1 + 0.6 * lunge, 1 + 0.9 * lunge, 1 + 0.4 * lunge);
       finOut = 0.15 + 0.9 * lunge; finFwd = 0.7 - 0.8 * lunge;
       squint = 1 - 0.3 * back;
     } else if (name === 'hurt') {
@@ -356,6 +483,7 @@ export function pose(model, name, t = 0, amount = 0) {
       finOut = 0.15 + 1.1 * k; finFwd = 0.7 - 0.6 * k;
       lips.scale.set(1 + 0.3 * k, 1 + 0.5 * k, 1);
       squint = 1 - 0.85 * k;
+      gape = Math.max(gape, 0.6 * k);
     } else {
       // Topples onto its side and flops a few times, then lies still with crossed-out eyes shut.
       const fall = S(clamp01(t / 0.45));
@@ -372,10 +500,11 @@ export function pose(model, name, t = 0, amount = 0) {
   }
 
   eyes.scale.set(1, squint, 1);
+  jaw.rotation.x = gape;
   fins.forEach((shoulder, i) => {
     const side = i === 0 ? 1 : -1;
     // Fin hangs down from the shoulder; swing it forward/back (walking) and out from the body.
     shoulder.rotation.set(finFwd + finSwing * side * -1, 0, finOut, 'XYZ');
   });
-  dorsal.rotation.x = 0.06 * Math.sin(t * 5);
+  dorsal.rotation.x = 0.06 * Math.sin(t * 5) - 0.12 * bristle;
 }

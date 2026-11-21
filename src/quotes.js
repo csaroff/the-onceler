@@ -38,6 +38,7 @@ export const QUOTES = {
     [LORAX, 'They’ll walk on their fins and get woefully weary in search of some water that isn’t so smeary.'],
   ],
   lastTree: [[ONCELER, 'The very last Truffula Tree of them all!']],
+  glance: [[ONCELER, 'The Lorax said nothing. Just gave me a glance.']],
   lift: [
     [ONCELER, 'The Lorax said nothing. Just gave me a glance.'],
     [ONCELER, '…as he lifted himself by the seat of his pants.'],

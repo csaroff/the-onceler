@@ -6,12 +6,23 @@ import { toon, flat, PALETTE, lathe, pipe, mergeGeometries, seeded } from '../to
 
 // Standing on its legs, the ground is this far below the body centre (before the lieutenant's scale).
 export const STAND_HEIGHT = 0.72;
+const SCAR = '#ffb4a8'; // bald pink welts on the champion
 const SMOKE_LAYER = 1; // ink.js NO_INK: smoke puffs get no pen line
 
 const VARIANTS = {
   happy: {
     scale: 1, body: PALETTE.swan, wing: '#ffc65c', tail: '#ffd56e', tuft: '#ff6a2a', beak: PALETTE.brass, legs: PALETTE.brass,
     eye: PALETTE.white, rim: null, brows: false, lids: 0, ragged: 0, ruffles: 0, crest: false, hook: false,
+  },
+  // The same happy swan, driven into a rage: same colours and size, but scowling, red-eyed, beak open, feathers up.
+  enraged: {
+    scale: 1, body: PALETTE.swan, wing: '#ffc65c', tail: '#ffd56e', tuft: '#ff6a2a', beak: PALETTE.brass, legs: PALETTE.brass,
+    eye: PALETTE.white, rim: '#e0303a', brows: true, lids: 0.2, ragged: 0, ruffles: 16, crest: false, hook: false, angry: true,
+  },
+  // A big old enraged one: 6 m wingspan, same colours, scarred and ragged.
+  champion: {
+    scale: 2.6, body: PALETTE.swan, wing: '#ffc65c', tail: '#ffd56e', tuft: '#ff6a2a', beak: PALETTE.brass, legs: PALETTE.brass,
+    eye: PALETTE.white, rim: '#e0303a', brows: true, lids: 0.3, ragged: 0.75, ruffles: 20, crest: false, hook: false, angry: true, scars: true,
   },
   smogged: {
     scale: 1, body: '#7a6f72', wing: '#625a5e', tail: '#4a4347', tuft: '#4a4347', beak: '#b3a46a', legs: '#9a8f62',
@@ -36,6 +47,8 @@ function horn(length, radius, bend = 0, sides = 5, rings = 2) {
   geo.computeVertexNormals();
   return geo;
 }
+// A cheap stiff feather standing on end: a three-sided open spike, base at the origin, tip up +y.
+const spike = (length, radius) => new THREE.ConeGeometry(radius, length, 3, 1, true).translate(0, length / 2, 0);
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
 
 // A copy of geo, scaled, then rotated (euler xyz), then moved.
@@ -191,7 +204,28 @@ function buildKit(name) {
 
   // Body, with bedraggled tufts poking out for the sooty ones.
   const body = [bodyGeometry()];
-  for (let i = 0; i < V.ruffles; i++) {
+  if (V.angry) {
+    // Hackles up: a ridge of stiff feathers standing on end along the back, and a bristling ruff at the base of the neck.
+    for (let i = 0; i < 6; i++) {
+      const z = 0.12 - i * 0.06, side = i % 2 ? 1 : -1;
+      body.push(aimed(spike(0.13 - Math.abs(i - 3) * 0.012 + rand(-0.01, 0.01), 0.032), [side * 0.25, 1, -0.55], [side * 0.03, 0.17 + 0.25 * Math.max(0, -z - 0.1) ** 2 * 4, z]));
+    }
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 6 - 0.5) * 3.4;
+      body.push(aimed(spike(0.1 + rand(-0.01, 0.02), 0.03), [Math.sin(a), 0.5 + Math.cos(a) * 0.3, 0.6 * Math.cos(a)], [Math.sin(a) * 0.09, 0.13 + Math.cos(a) * 0.02, 0.2 + Math.cos(a) * 0.03]));
+    }
+    if (V.scars) {
+      // Old wounds: bald pink welts across the flanks where the feathers never grew back.
+      const scars = [];
+      for (const [side, y, z, tilt] of [[1, 0.03, -0.02, 0.6], [-1, -0.02, 0.05, -0.5], [1, -0.07, -0.15, 0.3]]) {
+        const x = side * 0.19 * Math.sqrt(Math.max(0, 1 - (z / 0.36) ** 2));
+        scars.push(shaped(crumb, [0.016, 0.022, 0.11], [tilt, side * 0.2, 0], [x, y, z]));
+      }
+      kit.scars = merge(scars);
+    }
+  }
+  const ruffleCount = V.angry ? 0 : V.ruffles;
+  for (let i = 0; i < ruffleCount; i++) {
     const d = new THREE.Vector3(rand(-1, 1), rand(-0.2, 1), rand(-1, 0.6)).normalize();
     const p = [d.x * 0.17, d.y * 0.17 + 0.01, d.z * 0.25];
     body.push(aimed(horn(rand(0.07, 0.13), 0.025, rand(-0.04, 0.04), 4, 1), [d.x + rand(-0.5, 0.5), d.y + 0.3, d.z - 0.6], p));
@@ -204,6 +238,14 @@ function buildKit(name) {
     // A fountain of curly plumes, each rolling back over itself, fanned out like a showgirl's bustle.
     [[-0.9, 0.34], [-0.45, 0.46], [0, 0.55], [0.45, 0.46], [0.9, 0.34]].forEach(([u, len]) => {
       const g = curl(len, 0.04, 0.85).rotateY(Math.PI).rotateX(-0.55 + Math.abs(u) * 0.35).rotateZ(-u * 0.75);
+      tail.push(g.translate(u * 0.03, 0.06, -0.27));
+    });
+  } else if (V.angry) {
+    // The same bustle of plumes, but fluffed up and fanned wide like a cat's tail, the curls half sprung open.
+    // The champion's are ragged: a couple snapped short.
+    [[-1.2, 0.4], [-0.6, 0.5], [0, 0.58], [0.6, 0.5], [1.2, 0.4]].forEach(([u, len], i) => {
+      const broken = V.scars && (i === 1 || i === 4);
+      const g = curl(len * (broken ? 0.6 : 1), 0.045, broken ? 0.15 : 0.45, 3).rotateY(Math.PI).rotateX(-0.25 + Math.abs(u) * 0.2).rotateZ(-u * 0.75);
       tail.push(g.translate(u * 0.03, 0.06, -0.27));
     });
   } else {
@@ -222,10 +264,23 @@ function buildKit(name) {
   const lidTilt = V.brows ? 0.45 : 0.12;
   // Heavy lids over the top of each eye (heavier and tilted into a scowl on the angry ones).
   for (const side of [1, -1]) {
-    head.push(shaped(crumb, [0.038, 0.024 + V.lids * 0.012, 0.03], [0.25, side * 0.25, -side * lidTilt], [side * 0.035, 0.1 - V.lids * 0.016, 0.104]));
+    // (The enraged ones' lids slope down to the middle, under the brows, so the whole brow reads as one hard V.)
+    const tilt = V.angry ? side * 0.5 : -side * lidTilt;
+    head.push(shaped(crumb, [0.038, 0.024 + V.lids * 0.012, 0.03], [0.25, side * 0.25, tilt], [side * 0.035, 0.1 - V.lids * 0.016 - (V.angry ? 0.008 : 0), 0.104]));
   }
   const tuft = [];
-  if (V.crest) {
+  if (V.angry) {
+    // The same three curly feathers, sprung bolt upright with rage (the champion's middle one snapped and bent).
+    tuft.push(curl(V.scars ? 0.13 : 0.2, 0.019, 0.3).rotateX(-0.05).translate(0, 0.095, 0.0));
+    if (V.scars) tuft.push(horn(0.08, 0.012, 0.05, 4, 1).rotateX(-1.9).translate(0, 0.165, 0.0));
+    tuft.push(curl(0.15, 0.016, 0.3).rotateX(-0.3).rotateZ(-0.45).translate(0.015, 0.09, -0.02));
+    tuft.push(curl(0.15, 0.016, 0.3).rotateX(-0.3).rotateZ(0.45).translate(-0.015, 0.09, -0.02));
+    // Hackles: a fan of short stiff feathers standing out round the back of the head.
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 4 - 0.5) * 2.6;
+      tuft.push(aimed(spike(0.075, 0.024), [Math.sin(a), 0.35, -0.9], [Math.sin(a) * 0.06, 0.03 + Math.cos(a) * 0.03, -0.04]));
+    }
+  } else if (V.crest) {
     // A jagged crest of spikes from the brow back over the head.
     for (let i = 0; i < 6; i++) tuft.push(aimed(horn(0.14 + rand(0, 0.08) - i * 0.012, 0.03, -0.02, 5), [0, 1, -0.3 - i * 0.35], [rand(-0.01, 0.01), 0.09 - i * 0.008, 0.06 - i * 0.032]));
   } else {
@@ -240,7 +295,10 @@ function buildKit(name) {
   // Ink bits: long curly lashes for the happy swan, scowling brows for the others.
   const ink = [];
   for (const side of [1, -1]) {
-    if (V.brows) {
+    if (V.angry) {
+      // Heavy black brows slammed down into a V over the eyes, inner ends low over the beak.
+      ink.push(shaped(crumb, [0.046, 0.011, 0.014], [0.25, side * 0.3, side * 0.5], [side * 0.04, 0.104, 0.13]));
+    } else if (V.brows) {
       ink.push(shaped(horn(0.06, 0.014, 0, 5, 1), [1, 1, 1.4], [0.3, 0, side * (Math.PI / 2 + 0.4)], [side * 0.062, 0.122, 0.112]));
     } else {
       [0.0, 0.45, 0.9].forEach((a, i) => {
@@ -248,18 +306,27 @@ function buildKit(name) {
       });
     }
   }
-  kit.ink = merge(ink);
 
   // Eyes: small ovals close together, dot pupils looking forward (with a sore red rim on the sooty ones).
   const whites = [], pupils = [], rims = [];
   for (const side of [1, -1]) {
     whites.push(shaped(eyeBall, [0.03, 0.042, 0.022], [0, side * 0.25, 0], [side * 0.035, 0.0, 0.0]));
-    pupils.push(shaped(crumb, [0.012, 0.016, 0.008], [0, 0, 0], [side * 0.03, -0.008, 0.02]));
-    if (V.rim) rims.push(shaped(crumb, [0.038, 0.05, 0.02], [0, side * 0.25, 0], [side * 0.035, -0.002, -0.004]));
+    // Furious eyes get pin-prick pupils glaring at you.
+    const pin = V.angry ? 0.6 : 1;
+    pupils.push(shaped(crumb, [0.012 * pin, 0.016 * pin, 0.008], [0, 0, 0], [side * 0.03, -0.008, 0.02]));
+    if (V.rim) rims.push(shaped(crumb, V.angry ? [0.035, 0.048, 0.02] : [0.039, 0.052, 0.02], [0, side * 0.25, 0], [side * 0.036, -0.002, -0.003]));
+    if (V.scars && side === 1) {
+      // A scar slashed down across the right eye: a pink welt with three black stitches.
+      kit.faceScar = merge([shaped(crumb, [0.008, 0.062, 0.008], [0, 0, 0.35], [0.05, 0.06, 0.122])]);
+      for (const k of [-1, 0, 1]) ink.push(shaped(crumb, [0.011, 0.0028, 0.004], [0, 0, 0.35], [0.05 - k * 0.02 * Math.sin(0.35), 0.06 + k * 0.02, 0.129]));
+    }
   }
+  kit.ink = merge(ink);
   kit.whites = merge(whites);
   kit.pupils = merge(pupils);
   if (rims.length) kit.rims = merge(rims);
+  // The inside of the mouth: dark red, seen when the beak gapes.
+  kit.mouth = shaped(crumb, [0.03, 0.012, 0.06], [0, 0, 0], [0, -0.012, 0.12]);
 
   // Beak: blunt and rounded (hooked for the lieutenant); the lower half hinges open.
   const upper = [shaped(tinyBall, [0.04, 0.026, 0.085], [0.12, 0, 0], [0, 0.0, 0.15])];
@@ -354,6 +421,7 @@ export function build({ variant = 'happy', kind, lift = 0 } = {}) {
   const body = new THREE.Group();
   rig.add(body);
   body.add(M(kit.body, V.body));
+  if (kit.scars) body.add(M(kit.scars, SCAR));
   const tail = M(kit.tail, V.tail);
   tail.position.set(0, 0, -0.02);
   body.add(tail);
@@ -365,7 +433,8 @@ export function build({ variant = 'happy', kind, lift = 0 } = {}) {
 
   const head = new THREE.Group();
   body.add(head);
-  head.add(M(kit.head, V.body), M(kit.tuft, V.tuft), M(kit.ink, PALETTE.ink), M(kit.upperBeak, V.beak));
+  head.add(M(kit.head, V.body), M(kit.tuft, V.tuft), M(kit.ink, PALETTE.ink), M(kit.upperBeak, V.beak), new THREE.Mesh(kit.mouth, flatMat('#a8202a')));
+  if (kit.faceScar) head.add(M(kit.faceScar, SCAR));
   const eyes = new THREE.Group();
   eyes.position.set(0, 0.062, 0.105);
   head.add(eyes);
@@ -377,7 +446,8 @@ export function build({ variant = 'happy', kind, lift = 0 } = {}) {
   head.add(jaw);
   const smoke = new THREE.Group();
   smoke.position.set(0, -0.01, 0.24);
-  const puffs = [0, 1, 2].map(() => {
+  // Only the sooty ones cough smoke; the others don't carry the puffs at all.
+  const puffs = (name === 'smogged' ? [0, 1, 2] : []).map(() => {
     const m = new THREE.Mesh(kit.puff, mat('#c9c2c4'));
     m.layers.set(SMOKE_LAYER);
     m.scale.setScalar(0.04);
@@ -467,13 +537,17 @@ function setWing(w, flap, sweep, twist, elbowFlap, elbowSweep, fold) {
   w.elbow.scale.set(1 - 0.25 * fold, 1, 1 - 0.45 * fold);
 }
 
-// Sets the whole pose from scratch. Times: fly/glide/stand/sing in seconds; dive/peck/hurt/dead 0..1.
+// Sets the whole pose from scratch. Times: fly/glide/stand/sing/taunt in seconds; dive/peck/hurt/dead 0..1.
+// The enraged and champion swans hiss in `stand`, honk in `fly`, and scream (`taunt`) instead of singing.
 export function pose(model, name, t = 0, amount = 0) {
   const s = model.userData.swan;
   if (!s) return;
   const { rig, body, tail, head, eyes, jaw, smoke, puffs, wings, legs, loose } = s;
   const sooty = s.name === 'smogged';
-  if (!['fly', 'glide', 'stand', 'sing', 'dive', 'peck', 'hurt', 'dead'].includes(name)) name = 'stand';
+  const angry = !!s.V.angry;
+  if (!['fly', 'glide', 'stand', 'sing', 'dive', 'peck', 'hurt', 'dead', 'taunt'].includes(name)) name = 'stand';
+  // A furious swan doesn't sing; it screams.
+  if (angry && name === 'sing') name = 'taunt';
 
   // Defaults: standing, wings folded, beak shut.
   rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0);
@@ -506,6 +580,13 @@ export function pose(model, name, t = 0, amount = 0) {
     tail.rotation.x = -0.1 + 0.05 * f;
     squint = blink(t);
     if (sooty) cough = coughAt(t);
+    if (angry) {
+      // Neck thrust out straight at you like a spear, beak open and honking.
+      neck = mixNeck(NECKS.fly, NECKS.dive, 0.45);
+      headPitch = 0.0;
+      beak = 0.3 + 0.2 * Math.abs(Math.sin(t * 6));
+      squint = 1;
+    }
   } else if (name === 'stand' || name === 'sing') {
     const singing = name === 'sing' && !sooty;
     body.rotation.x = -0.03 + 0.02 * Math.sin(t * 2);
@@ -526,6 +607,34 @@ export function pose(model, name, t = 0, amount = 0) {
       body.rotation.z = 0.05 * Math.sin(t * 2.5);
     }
     if (sooty) cough = name === 'sing' ? coughAt(t, 0.9) : coughAt(t);
+    if (angry) {
+      // Hunched and hissing: neck cocked back like a snake about to strike, head low, beak open, wings half out.
+      neck = mixNeck(NECKS.stand, NECKS.peck, 0.22);
+      headPitch = 0.35;
+      headRoll = 0.05 * Math.sin(t * 7);
+      beak = 0.35 + 0.1 * Math.sin(t * 9);
+      squint = 1;
+      body.rotation.x = 0.12;
+      // Wings arched up over the back like an angry swan's, half spread and quivering.
+      wing = [0.95 + 0.04 * Math.sin(t * 17), 0.55, 0.35, -1.3, 0.25, 0.2];
+    }
+  } else if (name === 'taunt') {
+    // Rears up tall, flings its wings wide open, stretches its neck and screams; each scream a lunge of the head.
+    const beat = Math.sin(t * Math.PI * 2 * 0.9);
+    const scream = Math.max(0, beat);
+    body.rotation.x = -0.45 - 0.08 * scream;
+    body.position.y = 0.04 + 0.03 * scream;
+    tail.rotation.x = 0.35;
+    tail.rotation.y = 0.15 * Math.sin(t * 9);
+    neck = [[0, 0.1, 0.19], [0, 0.4, 0.42], [0, 0.55, 0.2 + 0.12 * scream], [0, 0.66 + 0.04 * scream, 0.42 + 0.14 * scream]];
+    headPitch = 1.05 - 0.15 * scream;
+    headRoll = 0.12 * Math.sin(t * 13) * scream;
+    beak = 0.35 + 0.45 * scream;
+    squint = 1;
+    // Wings up and out, the feather-fingers spread and trembling.
+    // Twisted so the broad face of each wing turns toward you, like a cape flung open.
+    wing = [0.45 + 0.12 * scream + 0.04 * Math.sin(t * 23), 0.35, 1.25, 0.35, 0.15, 0];
+    legSpread = 0.12;
   } else if (name === 'dive') {
     const k = S(clamp01(t * 1.5));
     rig.rotation.x = 0.55 + 0.35 * t;

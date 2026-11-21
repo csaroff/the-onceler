@@ -28,3 +28,16 @@ Poses (`pose(model, name, t, amount)`), all must work for every variant:
 
 Budget: 2,500 triangles each (lieutenant 4,000). Dozens are on screen at once: share geometry and materials between
 instances; only the moving parts (head, arms, legs, body) should be separate meshes.
+
+## Follow-up: one animal, driven into a rage
+
+The game no longer has good Bar-ba-loots and evil ones. There is one kind of Bar-ba-loot, and when its home and food
+are destroyed it is driven into a rage. Add `variant: 'enraged'`: **the same animal as `happy`**, the same fur and
+belly colours, the same size and proportions, but furious: brows hard down, eyes wide with small pupils and red rims,
+mouth open showing teeth, fur bristling up along the head, shoulders and back, claws out, shoulders hunched forward.
+A player who watched a happy one a minute ago must recognise the same creature. Not darker, not a monster.
+Add `variant: 'champion'`: a big old enraged Bar-ba-loot, 2.4 m, same colours going grey at the muzzle, scarred, one
+torn ear, carrying a whole broken Truffula trunk with its stripes clearly showing and a ragged stub of tuft at the end
+(the current lieutenant's club reads as a candy cane: make it thicker, splintered at the break, held two-handed).
+Every existing pose must work for both. Add a pose `rage` (t 0..1): rears up, beats its chest and roars, for the
+moment it turns. Add a pose `taunt` (t s): stands tall, shakes its club or fist at you and bellows, looping.

@@ -7,7 +7,9 @@ import { height, dist, rand, roadPoint, roadDistance, SHOP, FACTORY, TOWN, ROAD_
 import { PALETTE } from './toon.js';
 
 export const PRICE = 3.98;
-const KNIT_SECONDS = 3.5, HAND_TUFTS = 4, HACKER_TUFTS = 8, HACKER_REST = 18, WAGON_LOAD = 24;
+const KNIT_SECONDS = 3.5, HAND_TUFTS = 4, HACKER_TUFTS = 8, HACKER_REST = 18;
+const WAGON_LOAD = 80, WAGON_SPEED = 16; // town is a long haul: a wagon is gone for more than two minutes
+const TOWN_DEMAND = 240;                 // how many Thneeds the town will take before it has had enough for now
 const HACKER_SPACING = 30; // a smack reaches 13 m, so trees this far apart are in separate patches
 const FACTORY_PRICES = [250, 800, 2400, 6000];
 const FACTORY_RATE = [0, 0.5, 1.2, 3, 7];     // Thneeds a second, by factory level
@@ -16,14 +18,27 @@ const THNEEDS_PER_TUFT = [1, 1, 2, 3, 4];     // a biggered factory knits thinne
 const ITEMS = [
   { id: 'cart', name: 'Handcart', blurb: 'carry 12 tufts and 24 Thneeds', base: 24, growth: 1, max: 1 },
   { id: 'knitter', name: 'Hire a relative', blurb: 'knits at the shop all day', base: 50, growth: 1.5, max: 6 },
-  { id: 'wagon', name: 'Thneed Wagon', blurb: 'hauls Thneeds to town and sells them', base: 120, growth: 1.6, max: 6 },
+  { id: 'wagon', name: 'Thneed Wagon', blurb: 'hauls 80 Thneeds to town and sells them', base: 120, growth: 1.6, max: 8 },
   { id: 'factory', name: 'Thneed Factory', blurb: 'knits much faster; bigger it for more', max: 4 },
-  { id: 'hacker', name: 'Super-Axe-Hacker', blurb: 'whacks four trees at one smacker', base: 350, growth: 1.7, max: 4 },
+  { id: 'hacker', name: 'Super-Axe-Hacker', blurb: 'whacks four trees at one smacker', base: 350, growth: 1.7, max: 8 },
+];
+
+// What the vendors in town sell. Each can be bought several times; each time costs more and does more.
+export const GEAR = [
+  { id: 'axe', vendor: 'smith', name: 'A keener axe', blurb: 'every blow lands harder', prices: [90, 400, 1500, 5000] },
+  { id: 'sling', vendor: 'smith', name: 'A stronger sling', blurb: 'hits harder, loads faster', prices: [70, 320, 1200, 4000] },
+  { id: 'coat', vendor: 'tailor', name: 'A thicker coat', blurb: 'you can take more of a beating', prices: [120, 500, 1800, 6000] },
+  { id: 'boots', vendor: 'tailor', name: 'Seven-mile boots', blurb: 'you can carry twice the load', prices: [200, 900] },
+];
+const VENDORS = [
+  { id: 'smith', sign: ['AXES', '& SLINGS'], at: [16, -10] },
+  { id: 'tailor', sign: ['COATS', '& BOOTS'], at: [-18, -14] },
 ];
 
 export function createBusiness(g) {
   const { scene } = g, stock = g.stock;
   const owned = { cart: 0, knitter: 0, wagon: 0, factory: 0, hacker: 0 };
+  const gear = { axe: 0, sling: 0, coat: 0, boots: 0 };
   const units = [];       // everything that can be attacked and wrecked
   const pickups = [];     // tufts lying on the ground
   const v = new THREE.Vector3();
@@ -67,9 +82,16 @@ export function createBusiness(g) {
   const stall = place(townArt.build({ kind: 'stall' }), TOWN.x - 7, TOWN.z + 9, Math.PI);
   const stallCounter = anchor(stall, 'counter', new THREE.Vector3(0, 0, 2));
   place(townArt.build({ kind: 'well' }), TOWN.x + 11, TOWN.z + 12);
-  for (const s of [150, 185, 220, 262, 285]) { const at = roadPoint(s); place(townArt.build({ kind: 'lamp' }), at.x + 5, at.z + 5); }
-  place(townArt.build({ kind: 'signpost', lines: ['TOWN'] }), 13, 19, 1.2);
-  place(townArt.build({ kind: 'signpost', lines: ['THNEEDS', 'THIS WAY'] }), TOWN.x - 42, TOWN.z + 8, -1.2);
+  for (const s of [-110, -75, -40, 12, 40]) { const at = roadPoint(ROAD_TO_TOWN + s); place(townArt.build({ kind: 'lamp' }), at.x + 5, at.z + 5); }
+  place(townArt.build({ kind: 'signpost', lines: ['TOWN', 'A LONG WAY'] }), 13, 19, 1.2);
+  place(townArt.build({ kind: 'signpost', lines: ['THNEEDS', 'THIS WAY'] }), TOWN.x - 54, TOWN.z + 8, -1.2);
+  // The vendors: a sign, and somebody standing under it.
+  const vendors = VENDORS.map((def, i) => {
+    const x = TOWN.x + def.at[0], z = TOWN.z + def.at[1];
+    place(townArt.build({ kind: 'signpost', lines: def.sign }), x, z, Math.atan2(TOWN.x - x, TOWN.z - z));
+    const keeper = place(townArt.build({ kind: 'person', seed: 40 + i }), x + 1.6, z + 1.2, Math.atan2(TOWN.x - x, TOWN.z - z));
+    return { ...def, x, z, keeper };
+  });
 
   const people = [];
   function makePerson(seed, x, z) {
@@ -103,7 +125,7 @@ export function createBusiness(g) {
   visitor.state = 'away';
   visitor.timer = 12;
 
-  let demand = 30, demandTimer = 0, sellTimer = 0, queueTimer = 0;
+  let demand = TOWN_DEMAND, demandTimer = 0, sellTimer = 0, queueTimer = 0;
   const atStall = () => dist(g.player.x, g.player.z, stallCounter.x, stallCounter.z) < 4.5;
 
   function sale(count) {
@@ -116,7 +138,8 @@ export function createBusiness(g) {
 
   function updatePeople(dt) {
     demandTimer += dt;
-    if (demandTimer > 3) { demandTimer = 0; demand = Math.min(30, demand + 1); }
+    if (demandTimer > 1) { demandTimer = 0; demand = Math.min(TOWN_DEMAND, demand + 1); }
+    vendors.forEach((v, i) => townArt.pose(v.keeper, 'idle', g.time + i * 1.7, 1));
     const selling = atStall() && g.player.thneeds > 0;
     queueTimer -= dt;
     const queue = people.filter((p) => p.state === 'toStall' || p.state === 'want');
@@ -168,7 +191,7 @@ export function createBusiness(g) {
       visitor.model.rotation.y = Math.atan2(counter.x - visitor.x, counter.z - visitor.z);
       stand(visitor, stock.thneeds > 0 ? 'want' : 'idle');
       if (visitor.timer <= 0) {
-        const count = Math.min(2, stock.thneeds);
+        const count = Math.min(3, stock.thneeds);
         if (count) { stock.thneeds -= count; sale(count); }
         visitor.state = 'leaving';
       }
@@ -176,7 +199,7 @@ export function createBusiness(g) {
       visitor.s = Math.min(80, visitor.s + 4 * dt);
       const at = roadPoint(visitor.s);
       walk(visitor, at.x, at.z, g.war.underAttack() ? 7 : 4, dt, g.war.underAttack() ? 'flee' : 'walk');
-      if (visitor.s >= 80) { visitor.model.visible = false; visitor.state = 'away'; visitor.timer = rand(25, 45); }
+      if (visitor.s >= 80) { visitor.model.visible = false; visitor.state = 'away'; visitor.timer = rand(8, 16); }
     }
   }
 
@@ -219,7 +242,7 @@ export function createBusiness(g) {
       g.ui.pop(`−$${cost.toFixed(2)}`, true);
     }
     owned[id]++;
-    if (id === 'cart') { g.player.maxTufts = 12; g.player.maxThneeds = 24; place(works.build({ kind: 'handcart' }), SHOP.x + 5.5, SHOP.z + 5, 0.6); }
+    if (id === 'cart') { applyGear(); place(works.build({ kind: 'handcart' }), SHOP.x + 5.5, SHOP.z + 5, 0.6); }
     if (id === 'knitter') {
       const i = knitters.length, model = place(works.build({ kind: 'knitter' }), SHOP.x - 6.5 - (i % 3) * 3.6, SHOP.z + 2 + Math.floor(i / 3) * 4.2, 0.3);
       knitters.push({ model, timer: 0, unit: unit('knitter', 'knitting relative', model, 1.5, 8, 50) });
@@ -296,7 +319,7 @@ export function createBusiness(g) {
         }
       } else {
         const out = w.state === 'out';
-        w.s += (out ? 1 : -1) * 14 * dt;
+        w.s += (out ? 1 : -1) * WAGON_SPEED * dt;
         works.pose(w.model, 'run', g.time, 1);
         smoke(w.model, dt, w, 0.35, 0.5);
         if (out && w.s >= ROAD_TO_TOWN) { sale(w.load); w.load = 0; w.state = 'back'; }
@@ -310,7 +333,6 @@ export function createBusiness(g) {
       w.model.userData.setLoad?.(w.load / WAGON_LOAD);
     }
 
-    const standing = hackers.length ? g.world.standing() : [];
     for (const h of hackers) {
       const u = h.unit;
       if (u.broken) continue;
@@ -319,18 +341,16 @@ export function createBusiness(g) {
         // After a smack it stands and gets steam up again, so one hacker takes most of an hour to clear the valley.
         if (h.rest > 0) { h.rest -= dt; works.pose(h.model, 'run', g.time, 0.15); smoke(h.model, dt, h, 0.8, 0.5); continue; }
         works.pose(h.model, 'run', g.time, 0.3);
-        if (!standing.length) continue;
         // Each hacker picks a tree and sticks with it, and picks one well away from the others' trees,
         // so that no two of them work the same patch.
         if (!h.target || h.target.state !== 'standing') {
           const others = hackers.filter((o) => o !== h && !o.unit.broken).map((o) => (o.target?.state === 'standing' ? o.target : o));
           const clearOf = (t, gap) => others.every((o) => dist(t.x, t.z, o.x, o.z) >= gap);
-          const nearest = (list) => (list.length ? list.reduce((a, b) => (near(a) < near(b) ? a : b)) : null);
-          h.target = nearest(standing.filter((t) => clearOf(t, HACKER_SPACING))) // a patch of its own
-            || nearest(standing.filter((t) => clearOf(t, 1)))                     // few trees left: at least a tree of its own
-            || nearest(standing);
+          h.target = g.world.nearestStanding(h.x, h.z, 500, (t) => clearOf(t, HACKER_SPACING)) // a patch of its own
+            || g.world.nearestStanding(h.x, h.z, 500, (t) => clearOf(t, 1));                    // or at least a tree of its own
         }
         const target = h.target;
+        if (!target) continue;
         const dx = target.x - h.x, dz = target.z - h.z, d = Math.hypot(dx, dz);
         if (d < 5) { h.state = 'whack'; h.timer = 0; continue; }
         h.x += (dx / d) * 6 * dt; h.z += (dz / d) * 6 * dt;
@@ -342,7 +362,7 @@ export function createBusiness(g) {
         h.timer += dt;
         works.pose(h.model, 'run', g.time, 1);
         if (h.timer < 2) continue;
-        for (const tree of standing.filter((t) => near(t) < 13).sort((a, b) => near(a) - near(b)).slice(0, 4)) {
+        for (const tree of g.world.treesNear(h.x, h.z, 13).filter((t) => t.state === 'standing').sort((a, b) => near(a) - near(b)).slice(0, 4)) {
           tree.byMachine = true;
           g.world.fell(tree, h.x, h.z);
         }
@@ -368,6 +388,28 @@ export function createBusiness(g) {
   const repairCost = (u) => Math.round(u.base * 0.2);
   const brokenNearby = () => units.find((u) => u.broken && dist(u.x, u.z, g.player.x, g.player.z) < u.radius + 3.5);
 
+  // --- the vendors in town
+  const vendorNearby = () => vendors.find((v) => dist(v.x, v.z, g.player.x, g.player.z) < 6);
+  // What you carry and how hard you hit follow from what you have bought.
+  function applyGear() {
+    const p = g.player, load = (owned.cart ? 3 : 1) * (1 + gear.boots);
+    p.axe = 2 + gear.axe * 1.5;
+    p.slingDamage = 1 + gear.sling;
+    p.slingRest = 0.85 - gear.sling * 0.1;
+    const grown = 10 + gear.coat * 6 - p.maxHealth;
+    p.maxHealth += grown; p.health += Math.max(0, grown);
+    p.maxTufts = 4 * load; p.maxThneeds = 8 * load;
+  }
+  const gearPrice = (id) => GEAR.find((item) => item.id === id).prices[gear[id]] ?? Infinity;
+  function buyGear(id, free = false) {
+    const cost = gearPrice(id);
+    if (cost === Infinity || (!free && stock.money < cost)) return false;
+    if (!free) { money(-cost); g.audio.purchase(); g.ui.pop(`−$${cost.toFixed(2)}`, true); }
+    gear[id]++;
+    applyGear();
+    return true;
+  }
+
   // --- what [E] does here, and what the screen says about it
   const toStool = () => dist(g.player.x, g.player.z, stool.x, stool.z), toCounter = () => dist(g.player.x, g.player.z, counter.x, counter.z);
   const canTake = () => toCounter() < 3 && stock.thneeds > 0 && g.player.thneeds < g.player.maxThneeds;
@@ -379,12 +421,15 @@ export function createBusiness(g) {
     if (wreck) return `[E] mend the ${wreck.name} · $${repairCost(wreck)}`;
     if (canKnit()) return p.knitting ? 'Knitting…' : 'Hold [E] to knit a Thneed';
     if (canTake()) return '[E] take Thneeds to sell';
-    if (atStall() && p.thneeds > 0) return 'Hold [E] to sell';
+    if (atStall() && p.thneeds > 0) return demand > 0 ? 'Hold [E] to sell' : 'The town has all the Thneeds it wants for now';
+    const vendor = vendorNearby();
+    if (vendor) return '[E] see what is for sale';
     return '';
   }
 
   function use(dt, held, pressed) {
     const p = g.player, wreck = brokenNearby();
+    if (pressed && !wreck && vendorNearby()) { g.openMenu('vendor'); return; }
     p.knitting = false;
     if (wreck && pressed) {
       if (stock.money >= repairCost(wreck)) {
@@ -419,8 +464,9 @@ export function createBusiness(g) {
       const customer = people.find((c) => c.state === 'want');
       if (customer) {
         customer.state = 'cheer'; customer.timer = 1.4;
-        p.thneeds--; demand--; p.offering = 0.5; sellTimer = 0.45;
-        sale(1);
+        const count = Math.min(p.thneeds, demand, Math.max(1, Math.ceil(p.maxThneeds / 12))); // a cartload goes by the armful
+        p.thneeds -= count; demand -= count; p.offering = 0.5; sellTimer = 0.45;
+        sale(count);
         g.audio.cheer();
       }
     }
@@ -453,10 +499,11 @@ export function createBusiness(g) {
   }
 
   return {
-    update, use, hint, buy, price, owned, units, damage, scare, onTreeDown, pickups, people,
+    update, use, hint, buy, price, owned, units, damage, scare, onTreeDown, pickups, people, gear, buyGear, vendorNearby, hackers,
+    gearItems: () => { const v = vendorNearby(); return GEAR.filter((item) => v && item.vendor === v.id).map((item) => ({ ...item, price: gearPrice(item.id), owned: gear[item.id] })); },
     items: () => ITEMS.map((item) => ({ ...item, name: item.id === 'factory' && owned.factory ? 'Bigger the factory' : item.name, price: price(item.id), owned: owned[item.id] })),
     smog: () => owned.factory / 4,
     demand: () => demand,
-    places: { stool, counter, stallCounter, townCentre },
+    places: { stool, counter, stallCounter, townCentre, vendors },
   };
 }

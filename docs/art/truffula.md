@@ -1,26 +1,38 @@
 # truffula.js: Truffula Trees
 
-"The touch of their tufts was much softer than silk." The trees are the icon of the whole game. A tall, thin, wandering
-trunk with yellow and black-brown stripes, bending and S-curving, topped by one great soft, silky, shaggy tuft in a bright
-colour. The tuft is a mop of long soft drooping locks that swirl to a curl, like a huge tassel or a troll doll's hair.
-The last attempt made tufts that looked like "spiky starbursts": no straight spikes, no pom-pom ball of cones. Think
-overlapping, drooping, curling fat locks, with a silhouette that is lumpy and soft.
+"The touch of their tufts was much softer than silk." The trees are the icon of the whole game, and the current ones
+were rejected: "they still don't really look like Truffula Trees". The tuft is what is wrong, then colour and variety.
 
-Exports (keep these signatures; the game draws hundreds of trees by stamping copies):
-- `VARIANTS`: number of tree shapes (make 6, heights from about 7 m to 13 m, each with a different bend).
-- `parts(variant)` returns `{ trunk, tuft, height, top, curve }`, cached per variant:
-  - `trunk`: geometry, base at the origin, with the stripes baked in as vertex colours (attribute `color`).
-  - `tuft`: geometry centred on its own origin (the point where it meets the trunk tip), in white/near-white vertex
-    colours with slightly darker shading in the hollows; the game tints each tree's tuft with a colour.
-  - `height`, `top` (Vector3: where the tuft origin goes, at the trunk tip, following the bend),
-  - `curve(u, out)`: sets `out` to the centre of the trunk at u = 0 (base) to 1 (tip). Creatures climb along this.
-- `trunkMaterial()` and `tuftMaterial()`: shared materials, both `toon('#ffffff', { vertexColors: true })`.
-- `build({ kind, variant, color })` for single objects:
-  - `tree`: a whole tree (trunk + tinted tuft) for the lab and for felled trees.
-  - `stump`: a low striped stump with a flat pale top showing rings, slightly splintered on one side.
-  - `tuft`: a harvested tuft lying on the ground (about 0.9 m across), the thing the player picks up.
-  - `fruit`: a Truffula Fruit (about 0.2 m), which the Bar-ba-loots eat.
-  - `sapling`: a knee-high baby tree with a tiny tuft. `seed`: the very last Truffula Seed (about 0.15 m).
+What is wrong now: the tuft is a small mop of a dozen fat curling locks. It reads as an octopus or a jester's hat.
 
-Budget: trunk 500 triangles, tuft 1,800 triangles. The tuft must look good from directly below (the player stands
-under it) and from 100 m away. Render trees with several colours and variants side by side using `--opts`.
+What a Truffula Tree is in the book:
+- **The tuft is one big, soft, round puff of fine silky fluff**, like candy floss, a dandelion clock or a shaggy
+  pom of very fine hair, a little swirled, as if combed round by the wind. It is BIG: 3.5 to 5 m across on a 9 to 14 m
+  tree, as wide as a third of the tree's height. Its outline is a soft ball broken all the way round by hundreds of
+  short fine wisps, never by a few thick tentacles. Some tufts are round, some egg-shaped, some lopsided with a
+  wind-blown forelock or a soft-serve swirl on top. No lock may be thicker than about 12 cm at its root.
+  Build it as a lumpy core ball that carries the colour, covered in layers of many thin tapering wisps that follow a
+  swirl and poke 10 to 25% past the core. Shade the hollows darker and the wisp tips paler (vertex colours), so the
+  swirl reads as drawn lines of fluff. It must look soft from directly underneath and from 150 m.
+- **The trunk is very thin, very tall and bendy**: 12 to 18 cm thick, with narrow, even, slightly wavy stripes, pale
+  yellow and black-brown, about 25 cm each. It wanders: a long lazy S, a dog-leg, a lean. It never thickens much.
+- **Colour and variety.** The book's tufts are candy pink, orange, lemon yellow, scarlet, purple and (film) teal.
+  Set `PALETTE`-independent colours in your own file as `TUFT_COLORS` (export it; 7 colours) and make the 6 variants
+  really different in height (8 to 15 m), tuft size, tuft shape and bend, so a grove does not look stamped.
+
+Exports (the game stamps thousands of copies, so keep these):
+- `VARIANTS` (6), `TUFT_COLORS`.
+- `parts(variant, lod = 0)` returns `{ trunk, tuft, height, top, curve }`, cached per variant and lod:
+  - `trunk`: geometry, base at the origin, stripes baked in as vertex colours.
+  - `tuft`: geometry centred on the point where it meets the trunk tip, in white/near-white vertex colours with darker
+    hollows; the game tints each tree with an instance colour.
+  - `height`, `top` (Vector3, the trunk tip), `curve(u, out)` (centre of the trunk, u = 0 base to 1 tip).
+  - `lod = 0` is the full tree: trunk up to 400 triangles, tuft up to 2,600.
+  - `lod = 1` is the same tree for 120 m and beyond: trunk up to 40 triangles, tuft up to 160, same outline and size.
+    Thousands of these are on screen, so the budget for lod 1 is firm.
+- `trunkMaterial()`, `tuftMaterial()`.
+- `build({ kind, variant, color, lod })`: `tree`, `stump`, `tuft` (a harvested tuft on the ground, about 0.9 m, a soft
+  ball of fluff), `fruit`, `sapling`, `seed`. Keep the ones that already work.
+
+Show in every round: one tree at full height, a tuft from directly below, three different variants and colours side by
+side, and lod 0 next to lod 1 at zoom 0.25.

@@ -26,3 +26,14 @@ Poses: `swim` (t s), `leap` (t 0..1: an arc pose, nose up then nose down), `hum`
 `hurt` (t 0..1), `dead` (t 0..1: flops over on its side).
 Origin: for `walk` and the other land poses the origin is on the ground between the fins, facing +z; for `swim`,
 `leap` and `hum` the origin is the centre of the body. Budget 1,800 triangles (lieutenant 3,500).
+
+## Follow-up: one animal, driven into a rage
+
+The game no longer has good animals and evil ones. Each animal is one creature, and when its home is destroyed it is
+driven into a rage. For **both** `swan.js` and `fish.js` add `variant: 'enraged'`: **the same animal as `happy`**,
+same colours, same size, but furious: brows hard down, red-rimmed eyes with small pupils, feathers or fins bristling,
+beak or mouth open (the fish shows teeth and walks upright on its fins, as `gummed` does). A player who watched a
+happy one a minute ago must recognise the same creature. Not sooty, not slimy, not a monster.
+Add `variant: 'champion'` to both: a big old enraged one (swan 6 m wingspan, fish 2.5 m tall), same colours, scarred
+and ragged. Every existing pose must work for the new variants. Add a pose `taunt` (t s) to both: it rears up, spreads
+its wings or fins and screams at you, looping. Keep the existing variants working.

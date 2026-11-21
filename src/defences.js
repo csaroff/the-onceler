@@ -101,7 +101,8 @@ export function createDefences(g) {
       let target = null, best = def.range;
       for (const e of g.war.enemies) {
         const d = dist(e.x, e.z, s.x, s.z);
-        if (e.hp > 0 && e.state !== 'wait' && d < best) { target = e; best = d; }
+        // The guns hold their fire while an army stands in its line: a shot into it would end the truce.
+        if (e.hp > 0 && !['wait', 'line', 'throne'].includes(e.state) && d < best) { target = e; best = d; }
       }
       const turret = s.model.userData.turret;
       if (target && turret) turret.rotation.y = wrapAngle(Math.atan2(target.x - s.x, target.z - s.z) - s.rot);
