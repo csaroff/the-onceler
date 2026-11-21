@@ -1,47 +1,33 @@
-// Scenario: losing a fight must not trap you. If the third wave of a stage knocks you out, its lieutenant still comes
-// out to be challenged; otherwise the waves just grow for ever and the stage can never be ended.
-// Run with the dev server up, then: node tests/knocked-out.mjs
+// Scenario: losing an ordinary fight must not trap you or end the game. Knocked out in a charge, you come round at
+// the shop a quarter poorer, the army is gone, and the war carries on: he comes back later with another.
 import assert from 'node:assert/strict';
-import { launch, GAME_URL } from '../tools/browser.mjs';
+import { openGame } from './game.mjs';
 
-const browser = await launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-const errors = [];
-page.on('pageerror', (e) => errors.push(e.stack || e.message));
-await page.goto(`${GAME_URL}/?test`);
-await page.waitForFunction(() => window.game, null, { timeout: 60000 });
-await page.click('#start');
+const game = await openGame();
+const { run, read } = game;
+await run('g.story.seen.add("firstTree"); g.war.enabled = true; g.stock.money = 200; t.stand(40, 60, 0, 0); t.clearcut(40, 60, 12)');
 
-const result = await page.evaluate(() => {
-  const g = window.game, sizes = [];
-  g.story.seen.add('firstTree');
-  g.war.enabled = true;
-  g.war.stage = 1; // the Swomee-Swans
-  // Wave after wave arrives, and each time you stand there and lose.
-  for (let wave = 0; wave < 8 && !g.war.challenge; wave++) {
-    g.war.threat = 99; g.war.calm = 0;
-    for (let i = 0; i < 4000 && g.war.phase !== 'fight'; i++) g.step(0.05);
-    sizes.push(g.war.alive());
-    g.player.damage(99);
-    for (let i = 0; i < 40; i++) g.step(0.05);
-  }
-  return { sizes, challenge: g.war.challenge?.def.boss, wavesThisStage: g.war.wavesThisStage };
-});
+// An army comes. You refuse its champion, and stand there while the whole line arrives.
+assert.ok(await run("return t.until(() => g.war.phase === 'muster', 200)"), 'an army forms up');
+assert.ok(await run("return t.until(() => g.war.phase === 'fight', 60)"), 'and charges');
+assert.ok(await run('return t.until(() => g.stock.money < 200, 60)'), 'it knocks you out');
 
-// Three waves, won or lost, and the lieutenant is there to be fought.
-assert.equal(result.challenge, 'The Swomee-Swan Lieutenant', `no challenge after ${result.sizes.length} lost waves of sizes ${result.sizes.join(', ')}`);
-assert.equal(result.sizes.length, 3);
+let s = await read();
+assert.equal(s.dead, false, 'a knockout in a charge is not the end');
+assert.equal(s.money, 150, 'it costs a quarter of your money');
+assert.ok(Math.hypot(s.x - 5, s.z - 11) < 2, 'you come round at the shop');
+assert.equal(s.health, s.maxHealth, 'on your feet');
+assert.equal(s.enemies + s.line, 0, 'and the army has gone');
+assert.equal(s.loraxState, 'hidden');
+assert.equal(s.raid, 0, 'you did not beat that raid');
 
-// And however long a stage drags on, a wave stays a size one person can face.
-const big = await page.evaluate(() => {
-  const g = window.game;
-  g.war.clear();
-  Object.assign(g.war, { wave: 30, wavesThisStage: 30, threat: 99, calm: 0, phase: 'calm' });
-  for (let i = 0; i < 4000 && g.war.phase !== 'fight'; i++) g.step(0.05);
-  return g.war.alive();
-});
-assert.ok(big <= 24, `a late wave should be at most 24 strong, was ${big}`);
+// Fell some more, and he is back. Losing never switches the war off.
+await run('t.clearcut(5, 11, 12)');
+assert.ok(await run("return t.until(() => g.war.phase === 'muster', 300)"), 'another army comes');
 
-assert.deepEqual(errors, [], 'no page errors');
-await browser.close();
-console.log('ok: being knocked out does not trap you');
+// However long the war goes on, an army stays a size a fortified player can face.
+const big = await run("g.war.clear(); g.war.raid = 40; g.war.bearing = 1; g.war.muster(); return g.war.standing()");
+assert.ok(big <= 70, `a very late army is at most 70 strong (${big})`);
+
+await game.close();
+console.log('knocked-out: ok');

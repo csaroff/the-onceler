@@ -1,4 +1,4 @@
-// Scenario: you play for a while, close the tab, and come back later to the same valley.
+// Scenario: you play for a while, close the tab, and come back later to the same land, however far you had wandered.
 // Run with the dev server up, then: node tests/save-and-pause.mjs
 import assert from 'node:assert/strict';
 import { launch, GAME_URL } from '../tools/browser.mjs';
@@ -20,62 +20,71 @@ let page = await open('?test');
 await page.click('#start');
 const saved = await page.evaluate(() => {
   const g = window.game, run = (s) => { for (let i = 0; i < s * 20; i++) g.step(0.05); };
-  // Some history: the first tree and its scene are behind us, trees are down, things are owned and built.
+  // Some history: the first tree and a first raid are behind us, trees are down, things are owned and built.
   g.story.seen.add('firstTree');
+  g.story.seen.add('wave');
   g.war.enabled = true;
-  for (const tree of g.world.standing().slice(0, 40)) g.world.fell(tree, 0, 0);
+  for (const tree of g.world.treesNear(40, 60, 70).slice(0, 40)) g.world.fell(tree, 0, 0);
   run(4);
-  g.stock.money = 2000;
+  g.stock.money = 9000;
   for (const id of ['cart', 'knitter', 'knitter', 'wagon', 'factory', 'factory', 'hacker']) g.business.buy(id);
+  g.business.buyGear('axe', true); g.business.buyGear('coat', true); g.business.buyGear('coat', true);
   Object.assign(g.player, { x: 10, z: 4, yaw: 1 }); g.step(0.05);
   g.defences.select('jigger'); g.defences.place(); g.defences.select('wall'); g.defences.place(); g.defences.select(null);
-  // The Bar-ba-loots have already been sent away, and the swans' lieutenant is waiting.
-  g.wildlife.sendOff('loot');
-  // (A third wave that has just been seen off is what brings a lieutenant out.)
-  Object.assign(g.war, { stage: 1, wave: 6, wavesThisStage: 3, phase: 'fight' });
-  g.step(0.05);
-  Object.assign(g.player, { x: 33, z: -12, yaw: 2, tufts: 5, thneeds: 0 });
+  // Two raids have been beaten, and the Bar-ba-loots have been sent away from round the shop.
+  g.wildlife.sendOff('loot', 0, 0);
+  g.war.raid = 2;
+  // And you are a long way from home when you stop: three kilometres out, in country the game had to make as you went.
+  g.world.settle(-2200, 2100);
+  const far = g.world.nearestStanding(-2200, 2100, 400);
+  g.world.fell(far, 0, 0);
+  Object.assign(g.player, { x: far.x + 3, z: far.z, yaw: 2, tufts: 5, thneeds: 0 });
+  run(4);
   g.stock.tufts = 17; g.stock.thneeds = 9;
-  return g.snapshot();
+  return { save: g.snapshot(), far: far.id, hackerFelled: g.story.felled };
 });
-assert.ok(saved.felledTrees.length >= 40);
-assert.equal(saved.owned.factory, 2);
+assert.ok(saved.save.felledTrees.length >= 41);
+assert.equal(saved.save.owned.factory, 2);
 
 // The save has to survive being written down and read back.
-const text = JSON.stringify(saved);
+const text = JSON.stringify(saved.save);
 await page.close();
 
 // ---- Second sitting: a brand new page, given only that text.
 page = await open('?test');
-const back = await page.evaluate((text) => {
+const back = await page.evaluate(([text, far]) => {
   const g = window.game;
   g.restore(JSON.parse(text));
   for (let i = 0; i < 40; i++) g.step(0.05);
   return {
-    again: g.snapshot(), standing: g.world.standing().length, trees: g.world.trees.length, felled: g.story.felled,
+    again: g.snapshot(), farTree: g.world.treeById(far).state, drawn: g.world.drawn(),
     factoryBuilt: g.business.units.some((u) => u.kind === 'factory'), units: g.business.units.length,
-    structures: g.defences.structures.map((s) => s.def.id), loots: g.wildlife.count('loot'), swans: g.wildlife.count('swan'),
-    challenge: g.war.challenge?.def.boss, maxTufts: g.player.maxTufts, captions: g.ui.captionsPending(), scene: !!g.scenes.active,
+    structures: g.defences.structures.map((s) => s.def.id), lootsAtHome: g.wildlife.loots.filter((l) => Math.hypot(l.x, l.z) < 450).length, loots: g.wildlife.count('loot'),
+    axe: g.player.axe, maxHealth: g.player.maxHealth, maxTufts: g.player.maxTufts, captions: g.ui.captionsPending(), scene: !!g.scenes.active, phase: g.war.phase,
   };
-}, text);
+}, [text, saved.far]);
 
-// The valley is as it was left: the same trees down, the same things owned and standing.
-assert.equal(back.standing, back.trees - saved.felledTrees.length, 'felled trees stay felled');
-assert.equal(back.felled, saved.felledTrees.length);
-assert.deepEqual(back.again.owned, saved.owned);
+// The land is as it was left: the same trees down, here and three kilometres away, and the same things owned and standing.
+for (const id of saved.save.felledTrees) assert.ok(back.again.felledTrees.includes(id), `tree ${id} is still felled`);
+assert.equal(back.farTree, 'gone', 'the tree felled far from home is still a stump');
+assert.ok(back.drawn.full + back.drawn.outline > 500, 'and the country round you is there again');
+assert.deepEqual(back.again.owned, saved.save.owned);
 assert.equal(back.factoryBuilt, true, 'the factory is standing again');
 assert.equal(back.units, 1 + 2 + 1 + 1 + 1, 'shop, two relatives, a wagon, a factory and a hacker');
 assert.deepEqual(back.structures, ['jigger', 'wall']);
-assert.equal(back.maxTufts, 12, 'the handcart still counts');
-// So is the war: the Bar-ba-loots are still gone, the swans are not, and their lieutenant is still waiting.
-assert.equal(back.loots, 0);
-assert.ok(back.swans > 0);
-assert.equal(back.challenge, 'The Swomee-Swan Lieutenant');
-assert.deepEqual([back.again.war.stage, back.again.war.wave], [1, 6]);
-// And you are where you were, with what you had. The hacker has not had time to add to the shop's tufts.
+// What you bought in town still counts.
+assert.deepEqual(back.again.gear, saved.save.gear);
+assert.equal(back.axe, 3.5, 'the keener axe');
+assert.equal(back.maxHealth, 22, 'two thicker coats');
+assert.equal(back.maxTufts, 12, 'and the handcart');
+// So is the war: two raids beaten, and the Bar-ba-loots still gone from round the shop, though not from out here.
+assert.equal(back.again.war.raid, 2);
+assert.equal(back.lootsAtHome, 0);
+assert.equal(back.phase, 'calm', 'you come back to a quiet moment, not into the middle of a battle');
+// And you are where you were, with what you had.
 assert.equal(back.again.player.tufts, 5);
-assert.ok(Math.abs(back.again.player.x - 33) < 1);
-assert.equal(back.again.stock.money, saved.stock.money);
+assert.ok(Math.abs(back.again.player.x - saved.save.player.x) < 1);
+assert.equal(back.again.stock.money, saved.save.stock.money);
 // Loading is silent: no cutscene replays and nobody repeats themselves.
 assert.equal(back.scene, false, 'the first-tree scene does not replay');
 assert.equal(back.captions, false, 'no lines are spoken again on loading');
