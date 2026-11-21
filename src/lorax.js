@@ -44,7 +44,7 @@ export function createLorax(g) {
 
   // His seat: a great stump on a bare mound, ringed with dead trees.
   const seat = truffula.build({ kind: 'stump' });
-  seat.scale.setScalar(6);
+  seat.scale.set(26, 6, 26); // the stump of something enormous: wide enough to sit on, 2.7 m high
   seat.position.set(THRONE.x, height(THRONE.x, THRONE.z), THRONE.z);
   g.scene.add(seat);
   for (let i = 0; i < 26; i++) {

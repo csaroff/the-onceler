@@ -552,10 +552,12 @@ export function createWar(g) {
   war.alive = () => enemies.filter((e) => e.hp > 0 && !waiting(e)).length;
   war.standing = () => enemies.filter((e) => e.hp > 0 && e.state === 'line').length;
   war.underAttack = () => enemies.some((e) => e.hp > 0 && !waiting(e));
-  // You were knocked out. Whatever was here has had its way and gone.
+  // You were knocked out. Whatever was here has had its way and gone. An army that beat you has answered for the trees
+  // felled so far; a few local animals have not, so he still comes for those.
   war.clear = () => {
+    const raided = ['muster', 'duel', 'parley', 'fight'].includes(war.phase);
     unseat();
-    Object.assign(war, { champion: null, duel: false, phase: 'calm', calm: 60, threat: 0, field: null, reserves: 0 });
+    Object.assign(war, { champion: null, duel: false, phase: 'calm', calm: 60, threat: raided ? 0 : war.threat, field: null, reserves: 0 });
     g.lorax.vanish();
   };
 
