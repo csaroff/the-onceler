@@ -1,5 +1,6 @@
-// Brown Bar-ba-loots: small, round, dopey bears in baggy brown fur suits. Four variants share one rig:
-// happy, crummy (hungry and unwell), feral (what the Lorax sends back) and the lieutenant (a huge old feral boss).
+// Brown Bar-ba-loots: small, round, dopey bears in baggy brown fur suits. Every variant shares one rig:
+// happy, crummy (hungry and unwell), enraged (the same happy animal driven into a rage), champion (a huge old enraged
+// one with a broken Truffula trunk), and the older feral and lieutenant, which the game no longer uses.
 //
 // Rig:  model > scaler > mover > { hips > torso, head > (fur, face, lids, mouths), arms ; legs }
 // Every part is built once per variant (module-level cache) and shared between all instances.
@@ -12,7 +13,11 @@ const VARIANTS = {
   crummy: { fur: '#7d6248', belly: '#c9b48e', scale: 1, lid: 0.6, mood: 'sad' },
   feral: { fur: '#5a3920', belly: '#a2845a', scale: 1.08, lid: 0.35, mood: 'angry' },
   // The boss: small head sunk low and forward between humped shoulders, long heavy arms.
-  lieutenant: { fur: '#432c1a', belly: '#8a6f4c', scale: 2.15, lid: 0.35, mood: 'angry', boss: true, head: 0.8, neck: [0, -0.06, 0.06], arm: 1.3, shoulder: 0.24 },
+  lieutenant: { fur: '#432c1a', belly: '#8a6f4c', scale: 2.15, lid: 0.35, mood: 'angry', boss: true, necklace: true, head: 0.8, neck: [0, -0.06, 0.06], arm: 1.3, shoulder: 0.24 },
+  // The same happy animal driven into a rage: same colours and size, but bristling, red-eyed and roaring.
+  enraged: { fur: PALETTE.loot, belly: PALETTE.lootBelly, scale: 1, lid: 0, mood: 'angry', rage: true },
+  // A big old enraged one, grey at the muzzle, scarred, one torn ear, swinging a whole broken Truffula trunk.
+  champion: { fur: PALETTE.loot, belly: PALETTE.lootBelly, muzzle: '#c9c2b4', scale: 2.15, lid: 0, mood: 'angry', rage: true, boss: true, head: 0.92, neck: [0, -0.04, 0.05], arm: 1.2, shoulder: 0.23 },
 };
 const NOSE = '#2a1a10', INK = PALETTE.ink, TOOTH = '#fffaf0', CLAW = '#efe2c4', MOUTH = '#5a1620';
 
@@ -53,8 +58,8 @@ function lumpy(geo, seed, amount) {
 }
 
 // A lock of fur: fat at the root, curling to a point. `dir` is where it points, `curl` bends it sideways.
-function lock(color, at, dir, length, radius, curl = 0.3, roll = 0) {
-  const g = new THREE.ConeGeometry(radius, length, 4, 2, true).translate(0, length / 2, 0);
+function lock(color, at, dir, length, radius, curl = 0.3, roll = 0, sides = 4) {
+  const g = new THREE.ConeGeometry(radius, length, sides, 2, true).translate(0, length / 2, 0);
   const pos = g.attributes.position;
   for (let i = 0; i < pos.count; i++) { const u = pos.getY(i) / length; pos.setX(i, pos.getX(i) + curl * length * u * u); }
   g.computeVertexNormals();
@@ -98,7 +103,7 @@ function buildTorso(v, cfg) {
   // Shag: locks breaking the silhouette at the chest, flanks and hips.
   const angry = cfg.mood === 'angry';
   // A collar of shaggy locks round the neck, hanging down over the shoulders and the top of the chest.
-  const collar = 8;
+  const collar = cfg.rage ? 5 : 8;
   for (let i = 0; i < collar; i++) {
     const a = (i / collar) * Math.PI * 2 + 0.2;
     L.push(lock(fur, [Math.sin(a) * 0.19, 0.69 - HIP_Y, Math.cos(a) * 0.16], [Math.sin(a) * 0.9, -0.7, Math.cos(a) * 0.9],
@@ -110,7 +115,19 @@ function buildTorso(v, cfg) {
     L.push(lock(fur, [side * 0.25, y, -0.03 + rnd(-0.05, 0.05)], [side, angry ? rnd(-0.6, 0.6) : -0.5, -0.2],
       angry ? 0.12 : 0.08, 0.04, side * (angry ? rnd(-0.8, 0.8) : -0.5), rnd(0, 3)));
   }
-  if (angry) for (let i = 0; i < 3; i++) { // matted back
+  if (cfg.rage) {
+    // Hackles: fur standing straight up in a ridge along the shoulders and down the back, like a cross cat.
+    for (let i = 0; i < 5; i++) {
+      const u = i / 4, y = 0.74 - u * 0.36 - HIP_Y, z = -0.13 - Math.sin(u * 2.4) * 0.07;
+      L.push(lock(fur, [0, y, z], [0, 1 - u * 0.5, -0.9 - u * 0.4], 0.17 - u * 0.05, 0.05, (i % 2 ? 0.5 : -0.5), i, 3));
+    }
+    for (const side of [-1, 1]) for (let i = 0; i < 2; i++) { // bristling shoulders
+      const a = side * (0.9 + i * 0.6);
+      L.push(lock(fur, [Math.sin(a) * 0.19, 0.67 - i * 0.03 - HIP_Y, Math.cos(a) * 0.15], [Math.sin(a) * 0.7, 1, Math.cos(a) * 0.5 - 0.4],
+        0.15, 0.05, side * 0.6, i, 3));
+    }
+  }
+  if (angry && !cfg.rage) for (let i = 0; i < 3; i++) { // matted back
     const a = Math.PI + (i / 2 - 0.5) * 1.6;
     L.push(lock(fur, [Math.sin(a) * 0.2, 0.45 + rnd(-0.12, 0.2) - HIP_Y, Math.cos(a) * 0.18], [Math.sin(a), rnd(-0.3, 0.8), Math.cos(a)],
       0.12, 0.045, rnd(-0.7, 0.7), rnd(0, 3)));
@@ -118,6 +135,8 @@ function buildTorso(v, cfg) {
   if (boss) {
     // Scars: pale welts across the chest.
     L.push(part(pipe([[-0.15, 0.55 - HIP_Y, 0.17], [-0.02, 0.47 - HIP_Y, 0.235], [0.12, 0.4 - HIP_Y, 0.24]], 0.012, 8, 5), '#d99a8a'));
+  }
+  if (cfg.necklace) {
     // A necklace of Truffula stumps on a cord.
     const N = 7;
     const cord = [];
@@ -135,6 +154,7 @@ function buildTorso(v, cfg) {
 }
 
 function buildHead(cfg) {
+  if (cfg.rage) return buildRageHead(cfg);
   const { fur, belly, mood } = cfg, boss = !!cfg.boss, angry = mood === 'angry';
   const C = HEAD_C, R = HEAD_R;
   const furL = [], faceL = [];
@@ -211,6 +231,89 @@ function buildHead(cfg) {
   return { fur: merge(furL), face: merge(faceL), lidAt, lid: merge([part(LID_SHELL, fur)]), mouth: merge(mouthL), oh: merge(ohL) };
 }
 
+// The enraged face: the same round bear head, but brows slammed down into a V, eyes stretched wide and rimmed red
+// with pin-prick pupils, a roaring mouth full of teeth, and the fur on the crown standing up in spikes.
+const RED_RIM = '#e8423a', TONGUE = '#e86a7a';
+function buildRageHead(cfg) {
+  const { fur, belly } = cfg, boss = !!cfg.boss, muzzle = cfg.muzzle || belly;
+  const C = HEAD_C, R = HEAD_R;
+  const furL = [], faceL = [];
+  furL.push(part(lumpy(bigBall.clone(), boss ? 21 : 2, 0.03), fur, { s: R, p: C }));
+  // Muzzle, a little bigger and pushed forward: the jaw is dropped open.
+  const MC = [0, C[1] - 0.075, C[2] + 0.15], MR = [0.12, 0.095, 0.105];
+  furL.push(part(lowBall, muzzle, { s: MR, p: MC }));
+  // Nose wrinkled up: a big dark nose sitting high, with a crease of fur folded over the bridge.
+  furL.push(part(smallBall, NOSE, { s: [0.052, 0.036, 0.04], p: [0, MC[1] + 0.07, MC[2] + MR[2] - 0.035] }));
+  furL.push(part(pipe([front(C, R, -0.035, C[1] + 0.005, 0.005), front(MC, MR, 0, MC[1] + 0.085, 0.004), front(C, R, 0.035, C[1] + 0.005, 0.005)], 0.011, 4, 4), fur));
+  if (boss) { // grey whiskery cheeks
+    for (const side of [-1, 1]) furL.push(lock(muzzle, [side * 0.09, MC[1] - 0.02, MC[2] + 0.04], [side, -0.6, 0.4], 0.09, 0.035, -side * 0.4, 0));
+  }
+  // Ears flattened back. The champion's right ear is torn: a bite out of its top.
+  for (const side of [-1, 1]) {
+    const torn = boss && side > 0;
+    const ep = [side * 0.17, C[1] + 0.13, C[2] - 0.07];
+    const r = [-0.6, 0, -side * 0.9];
+    furL.push(part(smallBall, fur, { s: [0.075, torn ? 0.055 : 0.07, 0.035], r, p: ep }));
+    furL.push(part(smallBall, belly, { s: [0.045, torn ? 0.03 : 0.042, 0.02], r, p: [ep[0] + side * 0.008, ep[1] - 0.002, ep[2] + 0.02] }));
+    if (torn) for (const k of [-1, 1]) // two ragged points either side of a V bitten out of the top
+      furL.push(lock(fur, [ep[0] + k * 0.035, ep[1] + 0.025, ep[2] + 0.005], [side * 0.3 + k * 0.7, 1, 0], 0.07, 0.025, k * 0.2, 0, 3));
+    if (torn) furL.push(part(tinyBall, '#e0a090', { s: [0.02, 0.025, 0.03], p: [ep[0], ep[1] + 0.045, ep[2] + 0.005] })); // the raw nick
+  }
+  // Bristling crown: spikes of fur standing straight up from brow to nape.
+  const crown = [[0, 0.02, 0.15, 0.3], [0.08, 0.0, 0.13, 0.5], [-0.08, 0.0, 0.13, -0.5], [0.04, -0.07, 0.15, 0.4], [-0.05, -0.07, 0.14, -0.4],
+    [0.13, -0.05, 0.1, 0.8], [-0.13, -0.05, 0.1, -0.8], [0, -0.13, 0.13, 0]];
+  for (const [x, z, len, lean] of crown) {
+    const y = C[1] + R[1] * Math.sqrt(Math.max(0, 1 - (x / R[0]) ** 2 - ((z) / R[2]) ** 2)) - 0.03;
+    furL.push(lock(fur, [x, y, C[2] + z], [lean * 0.7, 1, z * 3], len, 0.042, lean * 0.5, x * 10, 3));
+  }
+  // Cheek ruffs bristling out sideways.
+  for (const side of [-1, 1]) for (let i = 0; i < 2; i++)
+    furL.push(lock(fur, [side * 0.19, C[1] - 0.04 - i * 0.06, C[2] + 0.03], [side, 0.1 - i * 0.5, 0], 0.12, 0.042, -side * 0.3, 0, 3));
+  // Eyes: wide and staring, rimmed red, with small pupils.
+  const EY = C[1] + 0.05, EX = 0.07;
+  for (const side of [-1, 1]) {
+    const e = front(C, R, side * EX, EY, -0.014);
+    // The red rim is a flat oval disc lying on the head just behind the eyeball, facing out along the head's surface.
+    const n = new THREE.Vector3((e[0] - C[0]) / R[0] ** 2, (e[1] - C[1]) / R[1] ** 2, (e[2] - C[2]) / R[2] ** 2).normalize();
+    const rim = new THREE.CircleGeometry(1, 14).scale(0.05, 0.06, 1)
+      .applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), n)).translate(e[0] + n.x * 0.012, e[1] + n.y * 0.012, e[2] + n.z * 0.012);
+    faceL.push(part(rim, RED_RIM));
+    faceL.push(part(lowBall, PALETTE.white, { s: [0.04, 0.05, 0.03], p: e }));
+    faceL.push(part(smallBall, INK, { s: [0.012, 0.013, 0.01], p: [e[0] - side * 0.004, e[1] - 0.004, e[2] + 0.022] }));
+    // Brows: thick dark slabs slammed down hard into a V over the nose, eating into the top of the eye.
+    const b = front(C, R, side * (EX - 0.004), EY + 0.038, 0.002);
+    furL.push(part(smallBall, '#3a2210', { s: [0.068, 0.022, 0.03], r: [-0.3, side * 0.35, side * 0.55], p: b }));
+    if (boss && side < 0) { // a scar raked across the left eye
+      const s0 = front(C, R, side * EX - 0.035, EY + 0.1, 0.004), s1 = front(C, R, side * EX + 0.035, EY - 0.085, 0.006);
+      const s2 = front(C, R, side * EX - 0.05, EY, 0.008);
+      furL.push(part(pipe([s0, s2, s1], 0.009, 8, 5), '#e0a090'));
+    }
+  }
+  const lidAt = [-1, 1].map((side) => front(C, R, side * EX, EY, -0.014));
+  // Roaring mouth, built round its own centre so the pose can stretch it open: a dark red hole with a tongue,
+  // a row of small upper teeth and two lower fangs jutting up.
+  // Hinged at the upper lip (the origin), so stretching it in y drops the jaw open rather than swallowing the nose.
+  const mc = front(MC, MR, 0, MC[1] - 0.008, -0.02);
+  const mouthL = [
+    part(smallBall, MOUTH, { s: [0.085, 0.05, 0.03], p: [0, -0.034, 0] }),
+    part(smallBall, TONGUE, { s: [0.05, 0.022, 0.02], p: [0, -0.064, 0.012] }),
+  ];
+  for (const x of [-0.05, -0.025, 0, 0.025, 0.05]) // upper teeth
+    mouthL.push(part(new THREE.ConeGeometry(0.014, 0.032, 4, 1, true), TOOTH, { r: [Math.PI, 0, 0], p: [x, 0.001 - Math.abs(x) * 0.25, 0.024 - Math.abs(x) * 0.1] }));
+  for (const x of [-0.055, 0.055]) // lower fangs
+    mouthL.push(part(new THREE.ConeGeometry(0.017, 0.05, 4, 1, true), TOOTH, { r: [0, 0, -x * 2], p: [x, -0.062, 0.02] }));
+  const ohL = [part(smallBall, MOUTH, { s: [0.045, 0.055, 0.03], p: [0, -0.034, 0] })];
+  return { fur: merge(furL), face: merge(faceL), lidAt, lid: merge([part(LID_SHELL, fur)]), mouth: merge(mouthL), oh: merge(ohL), mouthAt: mc };
+}
+
+// A hooked claw: a four-sided cone bent forward at the tip.
+const CLAW_GEO = (() => {
+  const g = new THREE.ConeGeometry(0.02, 0.1, 4, 2, true).translate(0, 0.05, 0), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const u = p.getY(i) / 0.1; p.setX(i, p.getX(i) + 0.05 * u * u); }
+  g.computeVertexNormals();
+  return g;
+})();
+
 function buildArm(cfg) {
   const { fur, belly } = cfg, claws = cfg.mood === 'angry', boss = !!cfg.boss;
   const r = boss ? 0.068 : 0.055;
@@ -233,7 +336,10 @@ function buildArm(cfg) {
   ];
   for (const x of [-0.035, 0, 0.035]) pawL.push(part(tinyBall, fur, { s: [0.025, 0.032, 0.025], p: [x, P - 0.055, 0.02] }));
   pawL.push(part(tinyBall, fur, { s: [0.022, 0.03, 0.022], r: [0, 0, 0.9], p: [0.06, P - 0.01, 0.03] })); // thumb, toward +x (mirrored on left)
-  if (claws) for (const x of [-0.035, 0, 0.035]) {
+  if (claws && cfg.rage) for (const x of [-0.035, 0, 0.035]) {
+    // Hooked claws sprouting from each finger, curving forward and down.
+    pawL.push(part(CLAW_GEO, CLAW, { r: [Math.PI - 0.5, Math.PI / 2, 0], p: [x * 1.15, P - 0.06, 0.03] }));
+  } else if (claws) for (const x of [-0.035, 0, 0.035]) {
     pawL.push(part(new THREE.ConeGeometry(0.013, 0.05, 4, 1, true), CLAW, { r: [Math.PI - 0.5, 0, 0], p: [x, P - 0.085, 0.035] }));
   }
   const lower = merge(pawL);
@@ -285,6 +391,42 @@ function buildClub() {
   return merge(L);
 }
 
+// The champion's weapon: a whole Truffula trunk snapped off at the ground. Thick, wandering, boldly striped, splintered
+// where it broke (the end it holds) and with a ragged, half-plucked stub of tuft still on the far end.
+// Origin at the right paw, +y along the trunk; the left paw grips it at CLUB_GRIP2.
+const CLUB_LEN = 0.72, CLUB_GRIP2 = 0.17;
+function buildTrunkClub() {
+  const L = [], rnd = seeded(41);
+  const pts = [[0, -0.1, 0], [0.012, 0.15, 0.006], [-0.02, 0.4, -0.008], [0.01, 0.6, 0.006], [0.035, CLUB_LEN, 0]];
+  const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
+  const rad = (u) => 0.068 - 0.016 * u;
+  // Stripes: alternating bands, uneven widths, so it looks painted rather than a candy cane.
+  const edges = [0, 0.12, 0.22, 0.36, 0.46, 0.6, 0.7, 0.84, 1];
+  for (let i = 0; i < edges.length - 1; i++) {
+    const a = edges[i], b = edges[i + 1], sub = [];
+    for (let k = 0; k <= 3; k++) { const p = curve.getPointAt(a + ((b - a) * k) / 3); sub.push([p.x, p.y, p.z]); }
+    L.push(part(pipe(sub, (u) => rad(a + (b - a) * u) * (i % 2 ? 1.04 : 1), 2, 8), i % 2 ? PALETTE.trunkDark : PALETTE.trunkLight));
+  }
+  // The break: long jagged splinters of pale wood and dark bark sticking out past the paws.
+  const butt = curve.getPointAt(0);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + 0.3, h = rnd(0.06, 0.14);
+    L.push(part(new THREE.ConeGeometry(0.03, h, 4, 1).translate(0, -h / 2, 0), i % 3 ? PALETTE.trunkLight : PALETTE.trunkDark,
+      { r: [Math.cos(a) * 0.3, rnd(0, 3), -Math.sin(a) * 0.3], p: [butt.x + Math.sin(a) * 0.045, butt.y + 0.01, butt.z + Math.cos(a) * 0.045] }));
+  }
+  // The tuft stub: a lopsided, matted lump of soft Truffula silk, half torn away, a few limp wisps hanging off it.
+  const top = curve.getPointAt(1), tuft = PALETTE.tufts[0];
+  L.push(part(lumpy(lowBall.clone(), 13, 0.08), tuft, { s: [0.11, 0.09, 0.1], p: [top.x + 0.01, top.y + 0.05, top.z] }));
+  L.push(part(lumpy(lowBall.clone(), 17, 0.08), tuft, { s: [0.075, 0.07, 0.07], p: [top.x - 0.07, top.y + 0.02, top.z + 0.03] }));
+  L.push(part(lumpy(lowBall.clone(), 19, 0.08), tuft, { s: [0.06, 0.055, 0.06], p: [top.x + 0.05, top.y + 0.1, top.z - 0.04] }));
+  for (let i = 0; i < 5; i++) { // short torn wisps of silk curling off the lump
+    const a = (i / 5) * Math.PI * 2 + 0.5;
+    L.push(lock(tuft, [top.x + Math.sin(a) * 0.08, top.y + 0.05, top.z + Math.cos(a) * 0.07], [Math.sin(a), rnd(-0.2, 0.5), Math.cos(a)],
+      rnd(0.06, 0.09), 0.03, rnd(-0.9, 0.9), a));
+  }
+  return merge(L);
+}
+
 const fruitGeo = merge([part(lowBall, PALETTE.tufts[0], { s: [0.07, 0.065, 0.07] }), part(tinyBall, '#7ad94f', { s: [0.02, 0.015, 0.02], p: [0, 0.065, 0] })]);
 const rockGeo = merge([part(lumpy(new THREE.IcosahedronGeometry(1, 1), 3, 0.12), '#6b5b4c', { s: [0.075, 0.06, 0.07] })]);
 
@@ -297,7 +439,7 @@ function kit(variant) {
     cfg, torso: buildTorso(variant, cfg), head: buildHead(cfg),
     upperR: arm.upper, lowerR: arm.lower, upperL: arm.mirror(arm.upper), lowerL: arm.mirror(arm.lower),
     thighR: leg.thigh, shinR: leg.shin, thighL: leg.thigh.clone().scale(-1, 1, 1), shinL: leg.shin.clone().scale(-1, 1, 1),
-    club: cfg.boss ? buildClub() : null,
+    club: cfg.rage && cfg.boss ? buildTrunkClub() : cfg.boss ? buildClub() : null,
   };
   // Mirrored copies need their triangles flipped back to face outward.
   for (const g of [k.upperL, k.lowerL, k.thighL, k.shinL]) flipWinding(g);
@@ -333,6 +475,7 @@ export function build({ variant = 'happy', kind, trunk = false, stump = false } 
     return { frame, lid };
   });
   const mouth = new THREE.Mesh(k.head.mouth, ff), oh = new THREE.Mesh(k.head.oh, ff); head.add(mouth, oh);
+  if (k.head.mouthAt) { mouth.position.set(...k.head.mouthAt); oh.position.set(...k.head.mouthAt); }
   const arms = [], legs = [];
   for (const side of [-1, 1]) {
     const R = side > 0;
@@ -360,7 +503,7 @@ export function build({ variant = 'happy', kind, trunk = false, stump = false } 
   // Anchors for the game: paws, head, and the club's striking end.
   // Club tip: where the lieutenant's blow lands (null for the others).
   let clubTip = null;
-  if (club) { clubTip = new THREE.Object3D(); clubTip.position.y = 0.6; club.children[0].add(clubTip); }
+  if (club) { clubTip = new THREE.Object3D(); clubTip.position.y = k.cfg.rage ? CLUB_LEN : 0.6; club.children[0].add(clubTip); }
   model.userData.anchors = { rightHand: right.hand, leftHand: left.hand, head, clubTip };
   if (stump) { // lab only: lift the animal onto a 0.6 m stump
     scaler.position.y = 0.6;
@@ -372,6 +515,35 @@ export function build({ variant = 'happy', kind, trunk = false, stump = false } 
 }
 
 // ---------------------------------------------------------------- posing
+// Two-handed grip: turn the left arm (shoulder swing and spread, elbow bend) until its paw sits on the club shaft,
+// a little above the right paw. A few rounds of nudging each angle; cheap enough for the one champion on screen.
+const _grip = new THREE.Vector3(), _hand = new THREE.Vector3(), _q = new THREE.Quaternion(), _d = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
+// Point the club along a direction in the body's own frame (+x is the side the club paw is on, +y up, +z forward).
+function aimClub(rig, dir) {
+  rig.hips.updateWorldMatrix(true, true);
+  rig.club.parent.getWorldQuaternion(_q).invert();
+  _d.set(...dir).normalize().applyQuaternion(rig.hips.getWorldQuaternion(new THREE.Quaternion()));
+  rig.club.quaternion.setFromUnitVectors(UP, _d).premultiply(_q);
+}
+function gripWithLeft(rig) {
+  const arm = rig.arms[0];
+  rig.club.children[0].updateWorldMatrix(true, false);
+  _grip.set(0, CLUB_GRIP2, 0).applyMatrix4(rig.club.children[0].matrixWorld);
+  const err = () => { arm.hand.updateWorldMatrix(true, false); return _hand.setFromMatrixPosition(arm.hand.matrixWorld).distanceToSquared(_grip); };
+  const set = (sw, out, el) => { arm.sh.rotation.set(sw, 0, -out, 'XZY'); arm.el.rotation.set(el, 0, 0); };
+  let q = [arm.sh.rotation.x, -arm.sh.rotation.z, arm.el.rotation.x], best = (set(...q), err()), step = 0.3;
+  for (let round = 0; round < 14; round++, step *= 0.6) {
+    for (let j = 0; j < 3; j++) for (const d of [step, -step]) {
+      const tryQ = q.slice(); tryQ[j] += d;
+      if (j === 2) tryQ[2] = Math.min(0, Math.max(-2.4, tryQ[2])); // elbows only bend forward
+      set(...tryQ); const e = err();
+      if (e < best) { best = e; q = tryQ; }
+    }
+  }
+  set(...q);
+}
+
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 const mix = (a, b, t) => a + (b - a) * t;
@@ -386,7 +558,7 @@ function fresh() {
     a: [[0, 0.2, -0.2, 0], [0, 0.2, -0.2, 0]],
     // legs: [hip (- forward), out, knee (+ bends back)]
     l: [[0, 0.04, 0], [0, 0.04, 0]],
-    lid: null, oh: false, held: null, wrist: 0,
+    lid: null, oh: false, held: null, wrist: 0, roar: 0, clubDir: null, twoHand: false,
   };
 }
 
@@ -473,6 +645,7 @@ const POSES = {
     s.a[0] = [-0.6 * k, 0.5 * k + 0.2, -0.8 * k, 0];
     s.l[0] = [0.25 * k, 0.15, 0.2 * k]; s.l[1] = [-0.35 * k, 0.15, 0.4 * k];
     s.oh = rig.cfg.mood !== 'angry' && hit > 0 && back < 0.5; s.lid = 0.2; // ferals keep snarling
+    s.roar = hit * (1 - back);
   },
   throw(s, t) {
     // Overarm: the right arm cocks back over the head, whips forward and lets go at t = 0.5.
@@ -491,6 +664,53 @@ const POSES = {
     s.a[0] = [-1.6 * k, 0.2 + 0.9 * k, -0.4 * k, 0]; s.a[1] = [-1.6 * k, 0.2 + 0.9 * k, -0.4 * k, 0];
     s.l[0] = [-0.35 * k, 0.12, 0.1]; s.l[1] = [0.1 * k, 0.12, 0.2 * k];
     s.lid = mix(0.3, -0.4, k); s.oh = k > 0.3;
+  },
+  rage(s, t, v, rig) {
+    // The moment it turns: rears up tall, drums its chest with both fists, then throws its head back and roars,
+    // and drops into the hunched fighting crouch.
+    const rear = smooth(0, 0.15, t) * (1 - smooth(0.85, 1, t));
+    const drum = smooth(0.1, 0.18, t) * (1 - smooth(0.5, 0.56, t));
+    const roar = smooth(0.5, 0.58, t) * (1 - smooth(0.88, 1, t));
+    const crouch = smooth(0.85, 1, t);
+    s.y = 0.06 * rear; s.lean = -0.22 * rear + 0.3 * crouch; s.hx = -0.1 * rear - 0.22 * roar + 0.05 * Math.sin(t * 90) * roar - 0.4 * crouch;
+    s.squash = 1 + 0.06 * rear;
+    s.l[0] = [0.1 * rear - 0.25 * crouch, 0.15, 0.4 * crouch]; s.l[1] = [0.1 * rear - 0.25 * crouch, 0.15, 0.4 * crouch];
+    // Drumming: fists swing in to the chest in turn, about four beats each.
+    const beat = Math.sin(t * 50), L = Math.max(0, beat), R = Math.max(0, -beat);
+    const hug = [-0.7, -0.2, -1.6, -0.4];
+    for (const [i, hit] of [[0, L], [1, R]]) {
+      const a = [mix(-0.6, -0.85, hit), mix(0.35, -0.05, hit), mix(-1.2, -1.75, hit), -0.3];
+      // Roaring: arms flung up and out, fists high.
+      const up = [-2.5, 0.75, -0.5, 0];
+      const ready = [-1.05, 0.32, -0.85, 0.35];
+      s.a[i] = [0, 1, 2, 3].map((j) => mix(mix(mix(fresh().a[i][j], a[j], drum), up[j], roar), ready[j], crouch));
+    }
+    s.hz = 0.1 * Math.sin(t * 50) * drum;
+    s.roar = Math.max(roar, 0.35 * drum, 0.5 * crouch); s.lid = 0;
+    if (rig.cfg.boss && rig.cfg.rage) {
+      // The champion keeps hold of its trunk: it drums with the free paw, then hoists the trunk high as it roars.
+      s.a[1] = [mix(-0.5, -2.6, roar) * (1 - crouch) - 0.55 * crouch, mix(0.55, 0.4, roar), mix(-0.6, -0.2, roar), 0];
+      s.clubDir = [mix(0.45, 0.25, roar), 1, mix(0, -0.2, roar)];
+      if (crouch > 0.5) { s.clubDir = [-0.75, 0.6, 0.45]; s.twoHand = true; }
+    }
+  },
+  taunt(s, t, v, rig) {
+    // Stands tall and shakes its club or fist at you, bellowing in bursts.
+    const shake = Math.sin(t * 16), p = (t % 1.6) / 1.6, bellow = smooth(0, 0.1, p) * (1 - smooth(0.55, 0.7, p));
+    s.lean = -0.12; s.y = 0.02; s.hx = -0.05 - 0.12 * bellow + 0.03 * shake; s.hy = 0.05 * Math.sin(t * 2); s.hz = 0.06 * shake * bellow;
+    s.twist = -0.15 + 0.05 * shake;
+    s.l[0] = [0.1, 0.18, 0]; s.l[1] = [-0.1, 0.18, 0.05];
+    if (rig.cfg.boss) {
+      // Club held up over the head in both paws and shaken.
+      s.a[1] = [-2.6 + 0.12 * shake, 0.25, -0.35, 0]; s.a[0] = [-2.5 + 0.12 * shake, 0.05, -0.5, 0]; s.wrist = 0.4 + 0.15 * shake;
+      if (rig.cfg.rage) { // the trunk held high across the head in both paws, shaken at you
+        s.a[1] = [-2.85 + 0.1 * shake, 0.45, -0.25, 0]; s.clubDir = [-1, 0.5 + 0.15 * shake, -0.15]; s.twoHand = true;
+      }
+    } else {
+      // Right fist up and shaking, left paw on the hip.
+      s.a[1] = [-1.6 + 0.1 * shake, 1.0, -1.2 + 0.3 * shake, 0.3]; s.a[0] = [0.1, 0.65, -1.4, 0.8];
+    }
+    s.roar = 0.25 + 0.75 * bellow; s.lid = 0;
   },
   dead(s, t) {
     // Topples over backwards (pivoting on the heels) and lies flat on its back, feet in the air.
@@ -527,6 +747,7 @@ function slam(s, t) {
   s.lean = -0.25 * raise + 0.45 * hit; s.hx = -0.3 * raise + 0.1 * hit;
   s.l[0] = [-0.45 * hit, 0.25, 0.45 * hit]; s.l[1] = [0.25 * hit, 0.25, 0.2 * hit];
   s.y = 0.04 * raise - 0.06 * hit; s.oh = down > 0.5 && rest < 0.5; s.lid = hit > 0.5 ? -0.3 : 0.2;
+  s.twoHand = true; s.roar = Math.max(raise * 0.6, hit);
 }
 
 // How each variant carries itself on top of whatever it is doing.
@@ -537,6 +758,8 @@ function flavour(s, name, rig) {
     s.lean += 0.15; s.hx += 0.15;
     for (const a of s.a) { a[1] *= 0.5; }
     if (name === 'idle') { clutch(s); s.lean += 0.05; }
+  } else if (rig.cfg.rage) {
+    rageFlavour(s, name, rig, sitting);
   } else if (mood === 'angry') {
     if (!sitting && name !== 'dead' && name !== 'tumble' && name !== 'climb') {
       s.lean += 0.3; s.hx -= 0.3; s.y -= 0.03;
@@ -553,7 +776,29 @@ function flavour(s, name, rig) {
   }
 }
 
-const STANDING = new Set(['idle', 'walk', 'run', 'march', 'attack', 'throw', 'hurt']);
+// Enraged: shoulders hunched up and forward, head thrust out low, knees bent, paws up and open with the claws out.
+function rageFlavour(s, name, rig, sitting) {
+  const boss = !!rig.cfg.boss;
+  if (sitting || ['dead', 'tumble', 'climb', 'rage', 'hurt'].includes(name)) return;
+  s.lean += 0.32; s.hx -= 0.42; s.hz *= 0.5;
+  s.l[0][0] -= 0.25; s.l[0][2] += 0.4; s.l[1][0] -= 0.25; s.l[1][2] += 0.4;
+  s.l[0][1] += 0.12; s.l[1][1] += 0.12;
+  if (name === 'idle' || name === 'walk' || name === 'run' || name === 'march' || name === 'taunt' && boss) {
+    // Paws raised in front, ready to swipe; the swing of the gait still rocks them.
+    for (const a of s.a) { a[0] = a[0] * 0.5 - 1.05; a[1] = 0.32; a[2] = -0.85; a[3] = 0.35; }
+  }
+  if (name === 'run') s.roar = 0.5;
+  if (name === 'idle') { // a heaving, growling breath
+    s.squash = 1 + Math.abs(Math.sin(s._t * 3)) * 0.04;
+  }
+  if (boss && !['attack', 'throw', 'taunt'].includes(name)) {
+    // The champion carries its trunk slantwise across its body in both paws, butt at the right hip, tuft over the left shoulder.
+    const sway = s.a[1][0] * 0.15;
+    s.a[1] = [-0.55 + sway, 0.05, -0.95, 0]; s.clubDir = [-0.8, 0.5, 0.5]; s.twoHand = true;
+  }
+}
+
+const STANDING = new Set(['idle', 'walk', 'run', 'march', 'attack', 'throw', 'hurt', 'rage', 'taunt']);
 const tmp = new THREE.Vector3(), inv = new THREE.Matrix4();
 
 export function pose(model, name, t = 0, amount = 0) {
@@ -561,6 +806,7 @@ export function pose(model, name, t = 0, amount = 0) {
   if (!rig) return;
   if (!POSES[name]) name = 'idle';
   const s = fresh();
+  s._t = t;
   POSES[name](s, t, amount, rig);
   flavour(s, name, rig);
   const cfg = rig.cfg;
@@ -604,12 +850,17 @@ export function pose(model, name, t = 0, amount = 0) {
     frame.rotation.set(0, 0, (i ? 1 : -1) * tilt);
     m.rotation.x = (Math.min(1, Math.max(-0.2, lid)) * 2 - 1) * Math.PI / 2;
   });
-  rig.mouth.visible = !s.oh; rig.oh.visible = s.oh;
+  // Roaring stretches the enraged mouth open; the other faces show their round "oh!" instead.
+  const roarFace = cfg.rage ? false : s.roar > 0.3;
+  rig.mouth.visible = !s.oh && !roarFace; rig.oh.visible = s.oh || roarFace;
+  if (cfg.rage) rig.mouth.scale.set(1 + 0.1 * s.roar, 1 + 0.6 * s.roar, 1 + 0.2 * s.roar);
   rig.fruit.visible = s.held === 'fruit';
   rig.rock.visible = s.held === 'rock';
   if (rig.club) {
     // The lieutenant puts its club down to throw, eat, mope, climb or roll, and drops it when it dies.
     rig.club.visible = !['throw', 'eat', 'mope', 'climb', 'tumble', 'dead'].includes(name);
     rig.club.rotation.set(Math.PI / 2 + s.wrist, 0, 0);
+    if (s.clubDir) aimClub(rig, s.clubDir);
+    if (cfg.rage && s.twoHand && rig.club.visible) gripWithLeft(rig);
   }
 }
