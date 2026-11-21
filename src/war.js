@@ -337,7 +337,15 @@ export function createWar(g) {
         // Anything that cannot get any nearer to what it is after, and has not landed a blow in half a minute, loses
         // heart and goes home. So high ground you can hold really does hold, against the ones that have to walk.
         e.stall += dt;
-        if (!e.def.boss && e.stall > (e.def.flies ? 45 : 28)) { g.fx.burst(e.x, e.y + 0.6, e.z, '#d8c9a0', 6, 3, 0.4); drop(e, i); continue; }
+        // A champion is more stubborn, but it gives up too, or a raid you cannot be reached in would never end. Only
+        // the Lorax himself never loses heart.
+        const patience = e === war.king ? Infinity : e.def.boss ? 60 : e.def.flies ? 45 : 28;
+        if (e.stall > patience) {
+          g.fx.burst(e.x, e.y + 0.6, e.z, '#d8c9a0', 6, 3, 0.4);
+          if (e === war.champion) war.champion = null;
+          drop(e, i);
+          continue;
+        }
         if (e.def.flies) updateFlyer(e, dt); else updateGround(e, dt);
       }
       // Nothing on the ground may stand inside another: they crowd round you; they do not pile up on one spot.
