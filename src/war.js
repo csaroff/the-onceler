@@ -90,6 +90,7 @@ export function createWar(g) {
         }
       } else if (Math.hypot(g.player.x - s.x, g.player.y + 1.1 - s.y, g.player.z - s.z) < 1.1) {
         g.player.damage(s.dmg);
+        if (s.owner) s.owner.stall = 0; // hitting you from a distance is fighting, not standing about
         land(s);
         done = true;
       } else if (s.target && s.target.type !== 'player' && valid(s.target)) {
@@ -344,8 +345,9 @@ export function createWar(g) {
         const patience = e === war.king ? Infinity : e.def.boss ? 60 : e.def.flies ? 45 : 28;
         if (e.stall > patience) {
           g.fx.burst(e.x, e.y + 0.6, e.z, '#d8c9a0', 6, 3, 0.4);
-          if (e === war.champion) war.champion = null;
           drop(e, i);
+          // The army was holding its line for the champion's sake. With it gone, they come.
+          if (e === war.champion) { war.champion = null; if (war.phase === 'duel') { charge(); g.ui.tip('It has given you up. The rest have not.', 6); } }
           continue;
         }
         if (e.def.flies) updateFlyer(e, dt); else updateGround(e, dt);
