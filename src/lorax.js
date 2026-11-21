@@ -35,6 +35,20 @@ export function createLorax(g) {
     return count;
   }
 
+  // How cluttered the view is behind a figure at (x, z): trees and rising ground beyond him. Zero means he stands against the sky.
+  function backdrop(x, z) {
+    const p = g.player, eyeY = p.y + 1.7, headY = height(x, z) + FAR_SCALE * 0.7;
+    const dx = x - p.x, dz = z - p.z, d2 = dx * dx + dz * dz;
+    let count = 0;
+    for (const t of [1.15, 1.3, 1.5, 1.75, 2.1]) if (height(p.x + dx * t, p.z + dz * t) > eyeY + (headY - eyeY) * t - 1) count += 2;
+    for (const tree of g.world.trees) {
+      if (tree.state !== 'standing') continue;
+      const t = ((tree.x - p.x) * dx + (tree.z - p.z) * dz) / d2;
+      if (t > 1 && t < 2.2 && Math.hypot(tree.x - (p.x + dx * t), tree.z - (p.z + dz * t)) < 7 * t) count++;
+    }
+    return count;
+  }
+
   // Somewhere a long way off with a clear view of you: a hilltop for preference, and in front of you if possible.
   function chooseSpot() {
     const p = g.player, dir = p.facing(), limit = Math.min(210, g.scene.fog.far * 0.62), view = Math.atan2(dir.x, dir.z);
@@ -50,7 +64,7 @@ export function createLorax(g) {
       const d = dist(c.x, c.z, p.x, p.z);
       if (d < 85 || d > limit + 1 || !isWild(c.x, c.z, 6)) continue;
       const ahead = ((c.x - p.x) * dir.x + (c.z - p.z) * dir.z) / d;
-      const score = ahead * 2 + c.hill - blockers(c.x, c.z) * 3 - Math.abs(d - 120) / 100 + rand(0, 0.3);
+      const score = ahead * 2 + c.hill - blockers(c.x, c.z) * 3 - Math.min(3, backdrop(c.x, c.z) * 0.4) - Math.abs(d - 120) / 100 + rand(0, 0.3);
       if (score > bestScore) { best = c; bestScore = score; }
     }
     return best || { x: p.x + dir.x * 90, z: p.z + dir.z * 90 };
@@ -93,6 +107,7 @@ export function createLorax(g) {
   };
 
   lorax.blockers = () => blockers(lorax.x, lorax.z);
+  lorax.backdrop = () => backdrop(lorax.x, lorax.z);
   lorax.distance = () => (lorax.state === 'watch' ? dist(g.player.x, g.player.z, lorax.x, lorax.z) : Infinity);
   lorax.pose = (name, t) => loraxArt.pose(model, name, t, 1);
   return lorax;

@@ -136,6 +136,7 @@ assert.equal(s.phase, 'omen', 'enough felling brings him to a hilltop');
 assert.equal(s.loraxVisible, true);
 assert.ok(s.loraxDistance > 80, `he keeps his distance, was ${s.loraxDistance.toFixed(0)} m`);
 assert.equal(s.enemies, 0, 'nothing happens yet');
+assert.ok(await page.evaluate(() => [...document.querySelectorAll('#compass span')].some((el) => el.textContent === 'the Lorax')), 'the compass says which way to look');
 assert.equal(await run('return g.lorax.blockers()'), 0, 'he stands where you have a clear view of him');
 // Look a little to one side of him, so the axe in your hand is not in the way.
 await run('const l = g.lorax; t.stand(g.player.x, g.player.z, l.x, l.z); g.player.yaw -= 0.3; g.player.pitch = 0.08; g.step(0.02)');

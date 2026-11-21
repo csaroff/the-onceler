@@ -177,6 +177,8 @@ function updateCompass() {
     if (Math.abs(rel) < 1.3) marks.push({ label, rel });
   }
   marks.push({ label: 'shop', rel: bearing(SHOP.x, SHOP.z), cls: 'place' }, { label: 'town', rel: bearing(TOWN.x, TOWN.z), cls: 'place' });
+  // While he is showing himself, the compass says which way to look.
+  if (g.lorax.state === 'watch') marks.push({ label: 'the Lorax', rel: bearing(g.lorax.x, g.lorax.z), cls: 'danger' });
   if (g.war.challenge) marks.push({ label: 'lieutenant', rel: bearing(g.war.challenge.x, g.war.challenge.z), cls: 'danger' });
   g.ui.compass(marks);
 }
@@ -314,7 +316,8 @@ g.step = (dt) => {
   g.world.setRuin(g.ruin);
   g.world.update(dt, g.time);
   g.fx.update(dt);
-  g.audio.update(dt, g.ruin, g.wildlife.birds());
+  // While he is watching, the birds stop singing.
+  g.audio.update(dt, g.ruin, g.lorax.state === 'watch' ? 0 : g.wildlife.birds());
   g.ui.update(dt);
   updateScreen();
 };
