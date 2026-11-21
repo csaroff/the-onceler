@@ -4,6 +4,7 @@ import * as truffula from './art/truffula.js';
 import { createInk } from './ink.js';
 import { createUI, dollars } from './ui.js';
 import { createAudio } from './audio.js';
+import { renderMusic } from './music.js';
 import { createFx } from './fx.js';
 import { createWorld } from './world.js';
 import { createPlayer } from './player.js';
@@ -211,6 +212,7 @@ const playing = () => g.started && !g.scenes.active;
 addEventListener('keydown', (e) => {
   if (!keys[e.code]) pressed.add(e.code);
   keys[e.code] = true;
+  if (e.code === 'KeyM') g.audio.toggleMusic();
   if (e.code === 'KeyN' && !g.started && hasSave) { localStorage.removeItem(SAVE_KEY); hasSave = false; location.reload(); }
   if (!playing()) return;
   if (e.code === 'KeyB') { menu = menu === 'business' ? null : 'business'; g.defences.select(null); }
@@ -319,8 +321,10 @@ g.step = (dt) => {
   g.world.setRuin(g.ruin);
   g.world.update(dt, g.time);
   g.fx.update(dt);
-  // While he is watching, the birds stop singing.
-  g.audio.update(dt, g.ruin, g.lorax.state === 'watch' ? 0 : g.wildlife.birds());
+  // While he is watching, the birds stop singing and the music stops with them.
+  const watched = g.lorax.state === 'watch', fighting = g.war.underAttack() || g.war.duel;
+  const mood = g.ended ? 'hope' : watched ? 'watched' : fighting ? 'fight' : g.scenes.active ? 'quiet' : 'calm';
+  g.audio.update(dt, g.ruin, watched ? 0 : g.wildlife.birds(), mood);
   g.ui.update(dt);
   updateScreen();
 };
@@ -343,6 +347,7 @@ if (!testing) {
   });
 }
 // For poking at the game from the console, and for the scenario tests.
+g.renderMusic = renderMusic;
 g.keys = keys;
 g.pressed = pressed;
 window.game = g;

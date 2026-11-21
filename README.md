@@ -6,7 +6,7 @@ A first-person game set in the world of The Lorax. It starts beautiful. You have
     npm run dev        # then open the printed URL
 
 Controls: WASD move, Shift run, Space jump, click to swing the axe, right-click or F for the sling, E to use,
-B for the business menu, V for defences, Q to close a menu.
+B for the business menu, V for defences, Q to close a menu, M to turn the music on and off.
 
 ## How it plays
 
@@ -37,6 +37,7 @@ Every line of dialogue is from the book and lives in `src/quotes.js`.
 - `src/terrain.js`: the map (groves, town, road, hills) and the height of the ground
 - `src/world.js`: ground, sky, plants and trees, and how they decay
 - `src/player.js`, `src/business.js`, `src/wildlife.js`, `src/war.js`, `src/lorax.js`, `src/defences.js`, `src/scenes.js`
+- `src/audio.js`, `src/music.js`: synthesised sound effects, and the background waltz written out as notes
 - `src/art/`: one file per subject; every model is built in code. `docs/ART.md` is the brief.
 - `src/ink.js`, `src/toon.js`: the drawing style (flat colour, pen outline)
 

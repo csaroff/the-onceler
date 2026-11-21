@@ -1,8 +1,9 @@
-// All sound is synthesised: birdsong and a warm chord that curdle into wind and a drone as `ruin` rises.
+// All sound is synthesised: birdsong and a waltz (music.js) that give way to wind and a drone as `ruin` rises.
 import { lerp, rand } from './terrain.js';
+import { createMusic } from './music.js';
 
 export function createAudio() {
-  let ctx = null, master, padThird, padGain, droneGain, windGain, noiseBuffer;
+  let ctx = null, master, music, droneGain, windGain, noiseBuffer;
   let chirpTimer = 1;
 
   function start() {
@@ -16,18 +17,8 @@ export function createAudio() {
     const data = noiseBuffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
 
-    // A major chord. The third is the note that goes sour.
-    padGain = ctx.createGain();
-    padGain.gain.value = 0.04;
-    padGain.connect(master);
-    for (const freq of [220, 277.18, 329.63, 440]) {
-      const osc = ctx.createOscillator();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      osc.connect(padGain);
-      osc.start();
-      if (freq === 277.18) padThird = osc;
-    }
+    music = createMusic(ctx, master);
+
     droneGain = ctx.createGain();
     droneGain.gain.value = 0;
     const droneFilter = ctx.createBiquadFilter();
@@ -96,10 +87,9 @@ export function createAudio() {
     tone(4186, 0.09, 0.4, volume * 0.4);
   }
 
-  function update(dt, ruin, birds = 1) {
+  function update(dt, ruin, birds = 1, mood = 'calm') {
     if (!ctx) return;
-    padThird.frequency.value = lerp(277.18, 255, ruin); // major sinks toward minor
-    padGain.gain.value = lerp(0.04, 0.015, ruin);
+    music.update(ruin, mood);
     droneGain.gain.value = ruin * 0.45;
     windGain.gain.value = ruin * 0.22;
     chirpTimer -= dt;
@@ -112,6 +102,7 @@ export function createAudio() {
 
   return {
     start, update, kaChing,
+    toggleMusic: () => music?.toggle(),
     chop: () => noise(900, 0.12, 0.8),
     crash: () => noise(220, 0.9, 0.9),
     purchase() { noise(500, 0.25, 0.9); kaChing(0.3); tone(1046, 0.2, 1.2, 0.2); },

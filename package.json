@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build", "test": "node tests/the-onceler.mjs && node tests/later-stages.mjs && node tests/save-and-pause.mjs && node tests/stragglers.mjs && node tests/knocked-out.mjs && node tests/real-input.mjs"
+    "build": "vite build", "test": "node tests/the-onceler.mjs && node tests/later-stages.mjs && node tests/save-and-pause.mjs && node tests/stragglers.mjs && node tests/knocked-out.mjs && node tests/music.mjs && node tests/real-input.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"
