@@ -309,9 +309,11 @@ export function createWorld(scene, hooks) {
 
   // ---------------------------------------------------------------- water, sky, the far skyline
   const waterMat = toon(WATER[0].clone());
-  const pond = new THREE.Mesh(new THREE.CircleGeometry(POND.r + 6, 40).rotateX(-Math.PI / 2), waterMat);
+  const pond = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape().absarc(0, 0, POND.r + 6, 0, Math.PI * 2), 20).rotateX(-Math.PI / 2), waterMat); // rim points only, for the same reason
   pond.position.set(POND.x, WATER_Y, POND.z);
-  const lakes = new THREE.Mesh(new THREE.CircleGeometry(700, 48).rotateX(-Math.PI / 2), waterMat);
+  // One big sheet at the level of the lakes, moved along with you. Its corners are always hundreds of metres off: a
+  // sheet with a point directly under your eye is drawn over everything when you look exactly level.
+  const lakes = new THREE.Mesh(new THREE.PlaneGeometry(1800, 1800).rotateX(-Math.PI / 2), waterMat);
   lakes.position.y = LAKE_Y;
   pond.layers.set(NO_INK);
   lakes.layers.set(NO_INK);
@@ -416,7 +418,7 @@ export function createWorld(scene, hooks) {
 
   function update(dt, time, x, z) {
     settle(x, z, 2);
-    lakes.position.set(x, LAKE_Y, z);
+    lakes.position.set(Math.round(x / CHUNK) * CHUNK, LAKE_Y, Math.round(z / CHUNK) * CHUNK);
     skyline.position.set(x, 0, z);
     for (const c of clouds) {
       c.x += dt * 2.2;
