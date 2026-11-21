@@ -1,12 +1,17 @@
-// Truffula Trees: a thin, wandering, striped trunk topped by one great soft tuft of drooping, curling locks.
-// The game stamps hundreds of copies of parts(variant); build() makes single objects for the lab, felled trees and pickups.
+// Truffula Trees: a very thin, tall, wandering striped trunk carrying one big soft puff of silky fluff.
+// The game stamps thousands of copies of parts(variant, lod); build() makes single objects for the lab, felled trees
+// and pickups.
 import * as THREE from 'three';
 import { toon, PALETTE, mergeGeometries, seeded, pipe, lathe } from '../toon.js';
 
 export const VARIANTS = 6;
+// The book's tufts: candy pink, orange, lemon yellow, scarlet, purple, the film's teal, and a hot magenta.
+export const TUFT_COLORS = ['#ff7ab6', '#ff9a2e', '#ffe03c', '#ff4040', '#a56cff', '#2cc4b0', '#ff4fc0'];
 
 const LIGHT = new THREE.Color(PALETTE.trunkLight), DARK = new THREE.Color(PALETTE.trunkDark);
-const v3 = () => new THREE.Vector3();
+const v3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const UP = v3(0, 1, 0);
+const FORELOCK = v3(-1, 0.35, 0.25).normalize(); // which way a wind-blown forelock sticks out
 
 // ---------------------------------------------------------------- helpers
 
@@ -31,17 +36,43 @@ function merge(list) {
   }));
 }
 
+// Build an indexed geometry from plain arrays.
+function geometry(pos, nor, col, index) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setIndex(index);
+  return geo;
+}
+
+// Turn every triangle so its front faces the way its vertex normals point. The ink pass draws both sides of a
+// surface and flips the normal of a back face, so a backwards triangle shows up as a hard black crease.
+function faceOut(geo) {
+  const p = geo.attributes.position, n = geo.attributes.normal, idx = geo.index.array;
+  const a = v3(), b = v3(), c = v3(), avg = v3();
+  for (let i = 0; i < idx.length; i += 3) {
+    a.fromBufferAttribute(p, idx[i]); b.fromBufferAttribute(p, idx[i + 1]); c.fromBufferAttribute(p, idx[i + 2]);
+    b.sub(a); c.sub(a);
+    avg.fromBufferAttribute(n, idx[i]).add(a.fromBufferAttribute(n, idx[i + 1])).add(a.fromBufferAttribute(n, idx[i + 2]));
+    if (b.cross(c).dot(avg) < 0) { const t = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = t; }
+  }
+  return geo;
+}
+
 // ---------------------------------------------------------------- trunk
 
 // A striped trunk swept along `curve`. Each stripe is its own band of rings, so the colour changes with a hard edge,
 // and the band edges tilt and wobble a little so the stripes look painted by hand rather than ruled.
-function stripedTube(curve, length, radiusAt, { stripe = 0.42, sides = 7, seed = 1 } = {}) {
+function stripedTube(curve, length, radiusAt, { stripe = 0.42, sides = 7, seed = 1, pale = 0.5 } = {}) {
   const rand = seeded(seed);
   const count = Math.max(3, Math.round(length / stripe));
   // Stripe edges in u, jittered so no two stripes are quite the same width.
   const edges = [0];
   for (let i = 1; i < count; i++) edges.push((i + rand(-0.22, 0.22)) / count);
   edges.push(1);
+  // Pale bands take `pale` of each pair, so a thin trunk still reads light from far away.
+  for (let i = 1; i < count; i += 2) edges[i] = Math.min(edges[i + 1] - 0.2 / count, edges[i] + (pale - 0.5) / count);
   const tilt = edges.map(() => [rand(-0.2, 0.2) * stripe, rand(-0.2, 0.2) * stripe]); // how far each edge leans, in metres
 
   const pos = [], nor = [], col = [], index = [];
@@ -81,226 +112,266 @@ function stripedTube(curve, length, radiusAt, { stripe = 0.42, sides = 7, seed =
   return geo;
 }
 
-// Six trunk shapes. Each is a list of sideways wanders [x, z] at evenly spaced heights, base to tip, in metres.
+// Six trees, made really different: height, bend, tuft size and tuft shape.
+// `wander` is the trunk's sideways drift [x, z] at evenly spaced heights, base to tip, in metres.
+// The tuft: `R` its radius, `axes` how it is stretched (x, y, z), `lop` how far its top is pushed sideways,
+// `peak` a soft-serve twist on top, `forelock` a wind-blown lick of longer hair on one side.
 const SHAPES = [
-  { height: 9.4, tuft: 'mop', wander: [[0, 0], [0.15, 0], [0.55, 0.1], [0.9, 0.2], [0.85, 0.1], [0.45, 0], [0.25, -0.05]] }, // a gentle S
-  { height: 7.2, tuft: 'flame', wander: [[0, 0], [-0.1, 0.05], [-0.45, 0.1], [-0.95, 0.15], [-1.35, 0.2], [-1.5, 0.25]] }, // a short bow
-  { height: 11.6, tuft: 'fountain', wander: [[0, 0], [0.2, 0.05], [0.7, -0.1], [0.75, -0.2], [0.2, -0.1], [-0.4, 0], [-0.6, 0.1], [-0.4, 0.15]] }, // double S
-  { height: 8.3, tuft: 'mop', wander: [[0, 0], [0.1, 0.1], [0.2, 0.45], [0.15, 0.95], [-0.15, 1.3], [-0.5, 1.35], [-0.6, 1.2]] }, // lean, top nods back
-  { height: 13, tuft: 'flame', wander: [[0, 0], [-0.15, 0], [-0.25, -0.2], [0.1, -0.5], [0.6, -0.6], [0.9, -0.4], [0.8, 0], [0.4, 0.2], [0.2, 0.2]] }, // tall wobbler
-  { height: 10.5, tuft: 'fountain', wander: [[0, 0], [0.3, 0.1], [1.0, 0.2], [1.4, 0.35], [1.35, 0.4], [0.95, 0.45], [0.7, 0.45]] }, // big bow and recover
+  // a round puff on a gentle S
+  { height: 7.6, wander: [[0, 0], [0.1, 0], [0.45, 0.1], [0.75, 0.15], [0.7, 0.1], [0.35, 0], [0.2, -0.05]],
+    tuft: { R: 1.95, axes: [1, 0.92, 1], lop: 0, peak: 0, forelock: 0 } },
+  // a tall egg on a dog-leg
+  { height: 10.2, wander: [[0, 0], [0.05, 0.02], [0.1, 0], [0.2, -0.05], [0.9, -0.1], [1.25, -0.1], [1.35, -0.05], [1.4, 0]],
+    tuft: { R: 1.75, axes: [0.92, 1.3, 0.95], lop: 0.1, peak: 0, forelock: 0 } },
+  // a lopsided puff with a wind-blown forelock, on a lean
+  { height: 8.4, wander: [[0, 0], [-0.1, 0.05], [-0.35, 0.1], [-0.7, 0.15], [-1.05, 0.2], [-1.35, 0.25]],
+    tuft: { R: 2.15, axes: [1.08, 0.88, 1], lop: -0.38, peak: 0, forelock: 1 } },
+  // a soft-serve swirl on a double S
+  { height: 9.4, wander: [[0, 0], [0.2, 0.05], [0.6, -0.1], [0.65, -0.2], [0.15, -0.1], [-0.35, 0], [-0.5, 0.1], [-0.35, 0.15]],
+    tuft: { R: 1.85, axes: [1, 0.95, 1], lop: 0, peak: 1.15, forelock: 0 } },
+  // the giant: a huge, slightly flattened puff on a long lazy S
+  { height: 11.4, wander: [[0, 0], [-0.15, 0], [-0.3, -0.2], [0.05, -0.5], [0.55, -0.6], [0.85, -0.4], [0.75, 0], [0.4, 0.2], [0.25, 0.2]],
+    tuft: { R: 2.55, axes: [1.05, 0.86, 1], lop: 0.15, peak: 0, forelock: 0 } },
+  // the youngster: short, bowed, a small round puff with a little twist
+  { height: 6.2, wander: [[0, 0], [0.25, 0.1], [0.75, 0.2], [1.05, 0.3], [1.05, 0.35], [0.85, 0.4]],
+    tuft: { R: 1.6, axes: [1, 1.05, 1], lop: 0.2, peak: 0.5, forelock: 0 } },
 ];
 
 // ---------------------------------------------------------------- tuft
 
-// One lock of the tuft: a long, smooth, flattened ribbon of hair.
-// - `path` is its line in a flat side view, as [out, up] pairs from the crown. `angle` is which way round the crown
-//   it points, and `swirl` twists it further round as it goes, so the locks spiral like combed hair.
-// - At the end it rolls up into a curl that tightens as it goes (`curl` is the starting radius, `roll` the number of
-//   turns). `tilt` turns the plane of the curl: 0 rolls it outward/inward (seen in silhouette), PI/2 rolls it sideways
-//   (seen face-on as a spiral). `turn` = +1 rolls outward or one way round, -1 the other.
-// - The cross-section is a smooth ellipse with exact normals, carried along without twisting, so the toon light
-//   sweeps softly across each lock and the pen only draws its outline.
-function lock({ path, angle, swirl = 0, width, thick = 0.3, curl = 0.3, turn = 1, roll = 1.3, tilt = 0,
-  body = 7, rings = 13, sides = 5, dark = 0.7, bury = 0.25 }) {
-  // 1. The body as a smooth 3D line.
-  // Start a little inside the scalp, so the root is buried rather than pasted on.
-  const [x0, y0] = path[0], [x1, y1] = path[1], len0 = Math.hypot(x1 - x0, y1 - y0) || 1;
-  const rooted = [[x0 - ((x1 - x0) / len0) * bury, y0 - ((y1 - y0) / len0) * bury], ...path];
-  const flat = new THREE.CatmullRomCurve3(rooted.map(([x, y]) => new THREE.Vector3(x, y, 0)), false, 'centripetal');
-  const pts = flat.getSpacedPoints(body).map((p, i) => {
-    const a = angle + swirl * (i / body);
-    return new THREE.Vector3(Math.cos(a) * p.x, p.y, Math.sin(a) * p.x);
-  });
-  const nBody = pts.length;
-  // 2. The curl: steer the heading round inside the curl plane, tightening.
-  const T = pts[nBody - 1].clone().sub(pts[nBody - 2]).normalize();
-  const end = pts[nBody - 1];
-  const outward = new THREE.Vector3(end.x, 0, end.z).normalize();
-  const N = outward.clone().addScaledVector(T, -outward.dot(T)).normalize(); // off the tuft, square to the lock
-  const U = N.clone().applyAxisAngle(T, tilt).multiplyScalar(turn); // the way the curl bends
-  const turns = Math.PI * 2 * roll, step = (curl * 0.75 * turns) / rings;
-  let heading = 0;
-  const P = end.clone();
-  for (let i = 1; i <= rings; i++) {
-    const r = curl * (1 - 0.6 * (i / rings));
-    heading += step / r;
-    P.addScaledVector(T, Math.cos(heading) * step).addScaledVector(U, Math.sin(heading) * step);
-    pts.push(P.clone());
+// Smooth bumpy noise on the unit sphere: a few soft lumps, the same every time for a given seed.
+function lumpField(seed) {
+  const rand = seeded(seed + 31);
+  const waves = [];
+  for (let i = 0; i < 7; i++) {
+    const d = v3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+    waves.push({ d, f: rand(2.2, 4.2), ph: rand(0, 6.28), a: rand(0.5, 1) });
   }
-  // 3. Sweep the ellipse along the line, carrying the frame along without twisting it.
-  const count = pts.length, pos = [], nor = [], col = [], index = [];
-  const tan = v3(), frameN = v3(), frameB = v3(), n = v3(), prev = v3(), q = new THREE.Quaternion();
-  for (let i = 0; i < count; i++) {
-    tan.subVectors(pts[Math.min(count - 1, i + 1)], pts[Math.max(0, i - 1)]).normalize();
-    if (i === 0) {
-      const a = angle;
-      frameB.set(-Math.sin(a), 0, Math.cos(a));
-      frameN.crossVectors(frameB, tan).normalize();
-    } else {
-      q.setFromUnitVectors(prev, tan);
-      frameN.applyQuaternion(q);
+  const total = waves.reduce((s, w) => s + w.a, 0);
+  return (dir) => waves.reduce((s, w) => s + w.a * Math.sin(dir.dot(w.d) * w.f + w.ph), 0) / total; // about -1..1
+}
+
+// The outline of a tuft, as a function from a unit direction to a point. Everything (the core, where the wisps grow,
+// the far-away version) uses it, so all levels of detail share one silhouette.
+function tuftShape(spec, seed, scale = 1) {
+  const { R, axes, lop, peak } = spec;
+  const lumps = lumpField(seed);
+  const cy = R * axes[1] * 0.78; // the trunk tip pushes a little way up into the bottom of the puff
+  const twist = seeded(seed + 5)() < 0.5 ? 1 : -1;
+  const out = v3();
+  const surface = (d, target = v3(), lift = 0) => {
+    // An ellipsoid...
+    const er = 1 / Math.sqrt((d.x / axes[0]) ** 2 + (d.y / axes[1]) ** 2 + (d.z / axes[2]) ** 2);
+    // ...made lumpy, a little flatter underneath, and a soft point drawn up on top for the soft-serve ones.
+    const top = Math.max(0, d.y);
+    let r = er * (1 + 0.11 * lumps(d)) * (1 - 0.1 * Math.max(0, -d.y) ** 2);
+    r += peak * top ** 3 * 0.45;
+    // The forelock: a wind-blown lick of fluff swept out from one side and drooping at its end.
+    const lick = spec.forelock ? THREE.MathUtils.smoothstep(d.dot(FORELOCK), 0.55, 1) ** 1.5 : 0;
+    r += spec.forelock * lick * 0.5;
+    r = r * R + lift;
+    out.copy(d).multiplyScalar(r);
+    out.y -= spec.forelock * lick * lick * 0.45 * R / Math.max(r, 1e-3) * r;
+    // The top leans over to one side (lopsided), and the top half twists round (combed by the wind).
+    out.x += lop * R * top * top;
+    // A soft-serve point flops over to one side at its tip.
+    out.x += peak * R * 0.4 * top ** 3;
+    const a = twist * (0.35 + peak * 0.9) * top * top;
+    const c = Math.cos(a), s = Math.sin(a), x = out.x, z = out.z;
+    out.x = x * c - z * s; out.z = x * s + z * c;
+    return target.set(out.x * scale, (out.y + cy) * scale, out.z * scale);
+  };
+  return { surface, cy: cy * scale, lumps, twist };
+}
+
+// The way the hair is combed at a point on the puff: round and round the puff, and a little downward, so the whole
+// tuft is one swirl from a crown on top (like the whorl on a child's head, or soft-serve).
+function combAt(d, spin, rake, out) {
+  const around = v3().crossVectors(UP, d).multiplyScalar(spin);      // round the puff
+  const down = v3(0, -1, 0).addScaledVector(d, d.y);                  // down the puff
+  out.copy(around).multiplyScalar(Math.cos(rake)).addScaledVector(down, Math.sin(rake));
+  if (out.lengthSq() < 1e-4) out.set(1, 0, 0).addScaledVector(d, -d.x); // right at the crown
+  return out.normalize();
+}
+
+// The tuft, full detail: a lumpy core ball that carries the colour, covered in hundreds of thin tapering wisps that
+// follow the swirl, each lying along the puff and lifting off it towards the tip, so the outline is broken all the
+// way round by fine fluff. Wisps are darker at the root (the hollows) and pale at the tip.
+function tuftFull(spec, seed, { wisps = 208, scale = 1, widthScale = 1 } = {}) {
+  const rand = seeded(seed + 77);
+  const shape = tuftShape(spec, seed);
+  const { surface, lumps } = shape;
+  const spin = shape.twist;
+  const R = spec.R;
+
+  // Shade for a point of the puff: darker underneath and in the dips between lumps.
+  const shadeAt = (d) => 0.74 + 0.16 * THREE.MathUtils.smoothstep(d.y, -0.9, 0.6) + 0.1 * lumps(d);
+
+  // 1. The core.
+  const core = new THREE.SphereGeometry(1, 17, 12);
+  {
+    const p = core.attributes.position, d = v3(), q = v3();
+    const col = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) {
+      d.set(p.getX(i), p.getY(i), p.getZ(i)).normalize();
+      surface(d, q, -0.07 * R);
+      p.setXYZ(i, q.x, q.y, q.z);
+      const k = shadeAt(d) * 0.94;
+      col.set([k, k, k], i * 3);
     }
-    prev.copy(tan);
-    frameB.crossVectors(tan, frameN).normalize();
-    frameN.crossVectors(frameB, tan).normalize();
-    const t = i / (count - 1), tb = i / (nBody - 1);
-    // Like a brush stroke: narrow where it grows from the crown, fullest over the shoulder, then tapering away so
-    // the curl at the end is a thin rolled tip, not a lump.
-    const shoulder = Math.sin(Math.PI * Math.min(1, 0.15 + tb * 0.95)) ** 0.7;
-    const fade = i < nBody ? 0.4 + 0.6 * shoulder * (1 - 0.45 * tb * tb) : 0.42 * (1 - 0.75 * (i - nBody + 1) / rings);
-    const w = width * fade + 0.012, h = w * thick + 0.008;
-    // Darker at the root (the hollows), full bright along the sweep and the curl.
-    const k0 = dark + (1 - dark) * THREE.MathUtils.smoothstep(tb, 0.05, 0.45);
-    const p = pts[i];
-    for (let s = 0; s < sides; s++) {
-      const qa = (s / sides) * Math.PI * 2, cq = Math.cos(qa), sq = Math.sin(qa);
-      pos.push(p.x + frameN.x * cq * h + frameB.x * sq * w, p.y + frameN.y * cq * h + frameB.y * sq * w, p.z + frameN.z * cq * h + frameB.z * sq * w);
-      n.copy(frameN).multiplyScalar(cq / h).addScaledVector(frameB, sq / w).normalize(); // the exact ellipse normal
-      nor.push(n.x, n.y, n.z);
-      const k = Math.min(1, k0 - 0.08 * Math.max(0, -n.y));
-      col.push(k, k, k);
-    }
+    core.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    core.deleteAttribute('uv');
+    core.computeVertexNormals();
   }
-  const tip = pos.length / 3, last = pts[count - 1];
-  pos.push(last.x + tan.x * 0.015, last.y + tan.y * 0.015, last.z + tan.z * 0.015);
-  nor.push(tan.x, tan.y, tan.z);
-  col.push(1, 1, 1);
-  for (let i = 0; i < count - 1; i++) {
-    for (let s = 0; s < sides; s++) {
-      const p0 = i * sides + s, p1 = i * sides + ((s + 1) % sides), p2 = p0 + sides, p3 = p1 + sides;
-      index.push(p0, p2, p1, p1, p2, p3);
+
+  // 2. The hair. Each wisp is a thin wedge standing up off the puff like a fin and following the comb: its buried
+  //    lower edge runs just under the core, its upper edge rises out of it and comes to a fine tip. Seen side-on (on
+  //    the outline of the puff) it is a soft flick of fluff; seen edge-on (across the face of the puff) it is one
+  //    drawn stroke. Its faces are lit almost like the puff underneath, so the colour stays flat and only the pen
+  //    draws hair. Roots are spread evenly over the puff (a Fibonacci spiral), then jittered.
+  const pos = [], nor = [], col = [], index = [];
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  const d = v3(), dir = v3(), side = v3(), P = v3(), Q = v3(), n = v3();
+  const wisp = (count, steps, style) => {
+    for (let i = 0; i < count; i++) {
+      const y = 1 - (2 * (i + 0.5)) / count, rr = Math.sqrt(1 - y * y), th = i * golden + style.offset;
+      d.set(Math.cos(th) * rr + rand(-0.06, 0.06), y + rand(-0.05, 0.05), Math.sin(th) * rr + rand(-0.06, 0.06)).normalize();
+      // Longer round the sides, short underneath; much longer in the forelock.
+      const fl = spec.forelock * THREE.MathUtils.smoothstep(d.dot(FORELOCK), 0.5, 0.95);
+      const length = R * rand(...style.length) * (0.6 + 0.4 * Math.sqrt(1 - d.y * d.y)) * (1 + 2.2 * fl);
+      const rake = rand(0.15, 0.5) + fl * 0.5, curl = rand(-style.curl, style.curl);
+      const tipLift = R * rand(...style.lift) * (1 + 1.6 * fl), body = R * rand(...style.body) * (1 + 2.5 * fl);
+      const thick = rand(0.03, 0.06) * widthScale; // across the top edge: far under 12 cm
+      const shade = shadeAt(d), first = pos.length / 3;
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        // Lower edge: buried, rising to the tip. Upper edge: the lower edge plus a body that swells and closes.
+        const low = -0.06 * R + (tipLift + 0.06 * R) * t ** 3;
+        const high = low + body * (t < 0.3 ? 0.6 + 0.4 * Math.sin((t / 0.3) * Math.PI / 2) : (1 - (t - 0.3) / 0.7) ** 1.2);
+        surface(d, P, low);
+        surface(d, Q, high);
+        combAt(d, spin, rake + curl * t, dir);
+        side.crossVectors(d, dir).normalize();
+        const k = THREE.MathUtils.lerp(shade, 1.1, t ** 1.1);
+        const w = (thick / 2) * (1 - t) + 0.003;
+        // Upper edge split in two (left and right), lower edge a single line: a thin wedge.
+        for (const sx of [-1, 1]) {
+          pos.push(Q.x + side.x * w * sx, Q.y + side.y * w * sx, Q.z + side.z * w * sx);
+          n.copy(d).addScaledVector(side, 0.5 * sx).normalize();
+          nor.push(n.x, n.y, n.z);
+          col.push(k, k, k);
+        }
+        pos.push(P.x, P.y, P.z);
+        nor.push(d.x, d.y, d.z);
+        col.push(shade, shade, shade);
+        d.addScaledVector(dir, length / steps / R).normalize();
+      }
+      for (let s = 0; s < steps; s++) {
+        const a = first + s * 3, b = a + 3; // a: upper-left, a+1: upper-right, a+2: lower
+        index.push(a, a + 2, b, b, a + 2, b + 2);           // left face
+        index.push(a + 1, b + 1, a + 2, a + 2, b + 1, b + 2); // right face
+      }
     }
-  }
-  for (let s = 0; s < sides; s++) index.push((count - 1) * sides + s, tip, (count - 1) * sides + ((s + 1) % sides));
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(index);
+  };
+  // The swirl, painted rather than inked: long pale ribbons lying flush on the core (too close to it for the pen to
+  // find an edge), tapering at both ends, like the combed lines of candy floss.
+  const ribbon = (count, steps) => {
+    for (let i = 0; i < count; i++) {
+      const y = 0.92 - (1.75 * (i + 0.5)) / count, rr = Math.sqrt(1 - y * y), th = i * golden + 0.7;
+      d.set(Math.cos(th) * rr + rand(-0.06, 0.06), y + rand(-0.05, 0.05), Math.sin(th) * rr + rand(-0.06, 0.06)).normalize();
+      const length = R * rand(0.8, 1.25), rake = rand(0.2, 0.45), curl = rand(-0.3, 0.3), width = R * rand(0.035, 0.06);
+      const first = pos.length / 3;
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        surface(d, P, -0.062 * R);
+        combAt(d, spin, rake + curl * t, dir);
+        side.crossVectors(d, dir).normalize();
+        const w = width * Math.sin(Math.PI * t) ** 0.7 + 0.002;
+        const k = Math.min(1.12, shadeAt(d) + 0.3 * Math.sin(Math.PI * t));
+        for (const sx of [-1, 1]) {
+          pos.push(P.x + side.x * w * sx, P.y + side.y * w * sx, P.z + side.z * w * sx);
+          nor.push(d.x, d.y, d.z);
+          col.push(k, k, k);
+        }
+        d.addScaledVector(dir, length / steps / R).normalize();
+      }
+      for (let s = 0; s < steps; s++) {
+        const r0 = first + s * 2, r1 = r0 + 2;
+        index.push(r0, r1, r0 + 1, r0 + 1, r1, r1 + 1);
+      }
+    }
+  };
+  ribbon(Math.round(wisps * 0.4), 4);
+  // The fringe: fine low flicks all the way round, which break the outline.
+  wisp(Math.round(wisps * 0.9), 2, { offset: 1.3, length: [0.3, 0.45], lift: [0.08, 0.16], body: [0.018, 0.03], curl: 0.6 });
+  const fluff = faceOut(geometry(pos, nor, col, index));
+  const geo = merge([core, fluff]);
+  if (scale !== 1) geo.scale(scale, scale, scale);
   return geo;
 }
 
-// The whorl underneath: short wide locks that start at the trunk tip and spiral out along the underside of the
-// scalp to its rim, so from below you look up into a swirl of hair (like the crown of a head), not a bald hole.
-function whorl(rand, spin, n, [rx, ry, cy], width) {
-  const under = (r) => [r, cy - ry * Math.sqrt(Math.max(0, 1 - (r / rx) ** 2)) - 0.06];
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    out.push(lock({
-      path: [under(0.02), under(rx * 0.45), under(rx * 0.8), under(rx * 0.97)],
-      angle: (i / n) * Math.PI * 2 + rand(-0.1, 0.1), swirl: spin * 1.4, width, thick: 0.22, curl: 0.16, turn: -1,
-      roll: 0.7, body: 6, rings: 5, dark: 0.62,
-    }));
+// The tuft far away (120 m and beyond): just the core ball, a little fuller to cover where the wisps were, with a
+// softly scalloped edge so it still reads as fluff, not a balloon.
+function tuftFar(spec, seed) {
+  const { surface, lumps } = tuftShape(spec, seed);
+  const geo = new THREE.SphereGeometry(1, 12, 6);
+  geo.deleteAttribute('uv');
+  const p = geo.attributes.position, d = v3(), q = v3();
+  const col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    d.set(p.getX(i), p.getY(i), p.getZ(i)).normalize();
+    // Every other column of vertices pushed out, so the rim is softly scalloped like the fluff it stands for.
+    const column = Math.round((Math.atan2(d.z, d.x) + Math.PI) / (Math.PI * 2 / 12));
+    const row = Math.round(Math.acos(THREE.MathUtils.clamp(d.y, -1, 1)) / (Math.PI / 6));
+    surface(d, q, spec.R * (0.1 + 0.07 * (((column + row) & 1) ? 1 : -1) * Math.sqrt(1 - d.y * d.y)));
+    p.setXYZ(i, q.x, q.y, q.z);
+    const k = 0.7 + 0.18 * THREE.MathUtils.smoothstep(d.y, -0.9, 0.6) + 0.06 * lumps(d);
+    col.set([k, k, k], i * 3);
   }
-  return out;
-}
-
-// The soft scalp everything grows from: a smooth squashed ball, darker underneath.
-function scalp([rx, ry, y]) {
-  const core = new THREE.SphereGeometry(1, 12, 8).scale(rx, ry, rx).translate(0, y, 0);
-  paint(core, (c, x, yy) => { const k = 0.62 + 0.3 * THREE.MathUtils.smoothstep(yy, y - ry, y + ry * 0.6); c.setRGB(k, k, k); });
-  return core;
-}
-
-// Three tuft styles. Every one is a crown of long locks around a soft scalp, all swirling the same way round.
-// Most hanging locks curl in silhouette; about a third roll sideways so that, from any side, some curls are seen
-// face-on as spirals.
-const curlTilt = (rand) => (rand() < 0.35 ? Math.PI / 2 * (rand() < 0.5 ? 1 : -1) : rand(-0.3, 0.3));
-
-const TUFT_STYLES = {
-  // The mop: flat locks combed down over a round dome, overlapping like shingles, flicking out into curls at the hem.
-  mop(rand, spin) {
-    const head = [1.1, 0.8, 0.35], pieces = [scalp(head), ...whorl(rand, spin, 5, head, 0.7)];
-    const tiers = [
-      { n: 9, root: 0.2, top: 1.15, reach: 1.28, hang: -0.55, width: 0.58, curl: 0.3, swirl: 0.6 },
-      { n: 5, root: 0.05, top: 1.3, reach: 1.2, hang: 0.05, width: 0.56, curl: 0.26, swirl: 0.7 },
-    ];
-    tiers.forEach((L, j) => {
-      for (let i = 0; i < L.n; i++) {
-        const reach = L.reach * rand(0.94, 1.06), hang = L.hang + rand(-0.15, 0.15);
-        pieces.push(lock({
-          path: [[L.root, L.top - 0.12], [reach * 0.6, L.top - 0.04], [reach * 0.98, L.top * 0.6], [reach * 1.03, (L.top * 0.6 + hang) * 0.5], [reach * 0.97, hang]],
-          angle: ((i + j * 0.5) / L.n) * Math.PI * 2 + rand(-0.1, 0.1), swirl: spin * L.swirl * rand(0.85, 1.15),
-          width: L.width * rand(0.9, 1.1), curl: L.curl * rand(0.9, 1.15), turn: 1, tilt: curlTilt(rand), roll: rand(1.0, 1.3),
-        }));
-      }
-    });
-    // The twist on top, like the tip of a soft-serve.
-    pieces.push(lock({ path: [[0, 1.1], [0.04, 1.35], [0.1, 1.55]], angle: rand(0, 6.28), width: 0.24, curl: 0.18, turn: -1, roll: 1.1, body: 5, rings: 6 }));
-    return pieces;
-  },
-  // The flame: like a troll doll's hair, locks sweep up round a tall dome and spiral together into a twisted curl
-  // on top; a skirt of locks rolls outward at the bottom.
-  flame(rand, spin) {
-    const head = [1.0, 1.05, 0.55], pieces = [scalp(head), ...whorl(rand, spin, 5, head, 0.7)];
-    const n = 9;
-    for (let i = 0; i < n; i++) {
-      pieces.push(lock({
-        path: [[0.95, 0.15], [1.08, 0.6], [0.98, 1.2], [0.6, 1.75], [0.2, 2.05]],
-        angle: (i / n) * Math.PI * 2 + rand(-0.08, 0.08), swirl: spin * rand(1.0, 1.2),
-        width: rand(0.52, 0.58), curl: rand(0.2, 0.26), turn: -1, tilt: rand(-0.3, 0.3), roll: rand(0.9, 1.15),
-      }));
-    }
-    for (let i = 0; i < 6; i++) {
-      pieces.push(lock({
-        path: [[0.7, 0.2], [1.1, 0.05], [1.4, -0.3], [1.5, -0.75]],
-        angle: ((i + 0.5) / 6) * Math.PI * 2 + rand(-0.12, 0.12), swirl: spin * 0.3,
-        width: rand(0.46, 0.5), curl: rand(0.26, 0.32), turn: 1, tilt: curlTilt(rand), roll: rand(1.0, 1.3),
-      }));
-    }
-    return pieces;
-  },
-  // The fountain: locks spring up out of a high crown, arch over and fall long, curling at the ends; a wide, droopy
-  // umbrella like a silk tassel.
-  fountain(rand, spin) {
-    const head = [1.0, 0.65, 0.75], pieces = [scalp(head), ...whorl(rand, spin, 5, head, 0.7)];
-    const tiers = [
-      { n: 10, root: 0.15, top: 1.4, reach: 1.6, hang: -0.8, width: 0.56, curl: 0.3, swirl: 0.4 },
-      { n: 5, root: 0.0, top: 1.5, reach: 1.3, hang: 0.15, width: 0.5, curl: 0.25, swirl: 0.5 },
-    ];
-    tiers.forEach((L, j) => {
-      for (let i = 0; i < L.n; i++) {
-        const reach = L.reach * rand(0.92, 1.06), hang = L.hang + rand(-0.2, 0.15);
-        pieces.push(lock({
-          path: [[L.root, L.top - 0.1], [reach * 0.55, L.top + 0.05], [reach * 0.95, L.top * 0.75], [reach * 1.05, (L.top * 0.75 + hang) * 0.5], [reach, hang]],
-          angle: ((i + j * 0.5) / L.n) * Math.PI * 2 + rand(-0.1, 0.1), swirl: spin * L.swirl * rand(0.8, 1.2),
-          width: L.width * rand(0.9, 1.1), curl: L.curl * rand(0.9, 1.15), turn: -1, tilt: curlTilt(rand), roll: rand(1.0, 1.3),
-        }));
-      }
-    });
-    return pieces;
-  },
-};
-
-function tuftGeometry(seed, size = 1, style = 'mop') {
-  const rand = seeded(seed + 101);
-  const spin = rand() < 0.5 ? 1 : -1;
-  const geo = merge(TUFT_STYLES[style](rand, spin));
-  geo.scale(size, size, size);
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.computeVertexNormals();
   return geo;
+}
+
+// The trunk far away: a plain three-sided bendy pole, khaki (the stripes blur together at that distance).
+function trunkFar(spine, radiusAt) {
+  const geo = new THREE.TubeGeometry(spine, 6, 1, 3, false);
+  const p = geo.attributes.position, n = geo.attributes.normal;
+  for (let i = 0; i < p.count; i++) {
+    const r = radiusAt(Math.floor(i / 4) / 6) * 1.3; // a touch fatter so it does not vanish
+    p.setXYZ(i, p.getX(i) + n.getX(i) * (r - 1), p.getY(i) + n.getY(i) * (r - 1), p.getZ(i) + n.getZ(i) * (r - 1));
+  }
+  geo.deleteAttribute('uv');
+  const khaki = LIGHT.clone().lerp(DARK, 0.35);
+  return paint(geo, (c) => c.copy(khaki));
 }
 
 // ---------------------------------------------------------------- parts, materials
 
-const cache = [];
-export function parts(variant = 0) {
+const cache = new Map();
+export function parts(variant = 0, lod = 0) {
   variant = ((Math.floor(variant) % VARIANTS) + VARIANTS) % VARIANTS;
-  if (cache[variant]) return cache[variant];
+  lod = lod ? 1 : 0;
+  const key = variant * 2 + lod;
+  if (cache.has(key)) return cache.get(key);
   const shape = SHAPES[variant], height = shape.height, n = shape.wander.length;
   const spine = new THREE.CatmullRomCurve3(shape.wander.map(([x, z], i) => new THREE.Vector3(x, (i / (n - 1)) * height, z)));
-  const base = 0.24 + height * 0.004, tipR = 0.12;
-  // Tapers up the trunk, with a little flare where it meets the ground.
-  const radiusAt = (u) => tipR + (base - tipR) * (1 - u) + 0.12 * Math.max(0, 1 - u * height / 0.6) ** 2;
-  const trunk = stripedTube(spine, height, radiusAt, { seed: variant + 7 });
+  // Very thin all the way up: 18 cm across at the foot, 12 cm at the tip, with a small flare into the ground.
+  const radiusAt = (u) => 0.06 + 0.03 * (1 - u) + 0.05 * Math.max(0, 1 - (u * height) / 0.5) ** 2;
+  const trunk = lod
+    ? trunkFar(spine, radiusAt)
+    : stripedTube(spine, height, radiusAt, { stripe: Math.max(0.24, height / 36), sides: 5, seed: variant + 7, pale: 0.6 });
   trunk.computeBoundingSphere();
-  const tuft = tuftGeometry(variant, 1.0 + height * 0.04, shape.tuft);
+  const tuft = lod ? tuftFar(shape.tuft, variant) : tuftFull(shape.tuft, variant);
   tuft.computeBoundingSphere();
+  tuft.computeBoundingBox();
   const top = spine.getPoint(1, v3());
-  return (cache[variant] = {
+  const result = {
     trunk, tuft, height, top,
-    curve: (u, out) => spine.getPoint(THREE.MathUtils.clamp(u, 0, 1), out),
-  });
+    curve: (u, out = v3()) => spine.getPoint(THREE.MathUtils.clamp(u, 0, 1), out),
+  };
+  cache.set(key, result);
+  return result;
 }
 
 let trunkMat, tuftMat;
@@ -314,8 +385,8 @@ const tuftTint = (color) => {
 
 // ---------------------------------------------------------------- single objects
 
-function tree(variant, color) {
-  const g = new THREE.Group(), part = parts(variant);
+function tree(variant, color, lod) {
+  const g = new THREE.Group(), part = parts(variant, lod);
   const tuft = new THREE.Mesh(part.tuft, tuftTint(color));
   tuft.position.copy(part.top);
   tuft.name = 'tuft';
@@ -326,58 +397,55 @@ function tree(variant, color) {
 }
 
 // A low stump: a striped stub with a flat pale top showing rings, and a few splinters left standing on one side
-// where the trunk tore as it fell.
+// where the trunk tore as it fell. Sized for the thin trunk, with a little flare at the foot.
 function stumpGeometry() {
-  const height = 0.38, r = 0.27;
-  const spine = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.02, height * 0.5, 0), new THREE.Vector3(0.05, height, 0.02)]);
-  const side = stripedTube(spine, height * 1.0, (u) => r + 0.07 * (1 - u) ** 2, { stripe: 0.1, sides: 9, seed: 3 });
+  const height = 0.34, r = 0.1;
+  const spine = new THREE.CatmullRomCurve3([v3(0, 0, 0), v3(0.01, height * 0.5, 0), v3(0.03, height, 0.01)]);
+  const side = stripedTube(spine, height, (u) => r + 0.06 * (1 - u) ** 3, { stripe: 0.08, sides: 8, seed: 3 });
   // The cut face, a slightly tilted disc with rings painted on it.
-  const face = new THREE.CircleGeometry(r, 9, 0, Math.PI * 2).rotateX(-Math.PI / 2);
   const ring = new THREE.Color('#d9b979'), wood = new THREE.Color('#f7e7b4');
-  paint(face, (c, x, y, z) => c.copy(Math.floor(Math.hypot(x, z) / r * 3.2 + 0.5) % 2 ? ring : wood));
-  // CircleGeometry only has a centre and a rim, so give it rings of its own: a smaller disc floating just above.
-  const inner = new THREE.CircleGeometry(r * 0.55, 9).rotateX(-Math.PI / 2).translate(0, 0.012, 0);
-  paint(inner, (c) => c.copy(ring));
-  const core = new THREE.CircleGeometry(r * 0.25, 7).rotateX(-Math.PI / 2).translate(0, 0.024, 0);
-  paint(core, (c) => c.copy(wood));
+  const face = paint(new THREE.CircleGeometry(r, 8).rotateX(-Math.PI / 2), (c) => c.copy(wood));
+  const inner = paint(new THREE.CircleGeometry(r * 0.6, 8).rotateX(-Math.PI / 2).translate(0, 0.006, 0), (c) => c.copy(ring));
+  const core = paint(new THREE.CircleGeometry(r * 0.28, 6).rotateX(-Math.PI / 2).translate(0, 0.012, 0), (c) => c.copy(wood));
   const top = merge([face, inner, core]);
-  top.rotateZ(0.08).translate(0.05, height, 0.02);
+  top.rotateZ(0.08).translate(0.03, height, 0.01);
   // Splinters: jagged striped teeth on one side of the rim.
   const teeth = [];
-  [[-0.7, 0.2], [-0.25, 0.13], [0.2, 0.17]].forEach(([a, h], i) => {
-    const t = new THREE.ConeGeometry(0.075, h, 4).translate(0, h / 2, 0).rotateZ(-0.25 + i * 0.12);
-    t.translate(0.05 + Math.cos(a + Math.PI) * r * 0.85, height - 0.03, Math.sin(a + Math.PI) * r * 0.85);
+  [[-0.7, 0.14], [-0.15, 0.09], [0.35, 0.12]].forEach(([a, h], i) => {
+    const t = new THREE.ConeGeometry(0.035, h, 4).translate(0, h / 2, 0).rotateZ(-0.25 + i * 0.12);
+    t.translate(0.03 + Math.cos(a + Math.PI) * r * 0.75, height - 0.02, Math.sin(a + Math.PI) * r * 0.75);
     paint(t, (c) => c.copy(i % 2 ? DARK : LIGHT));
     teeth.push(t);
   });
   return merge([side, top, ...teeth]);
 }
 
-// A harvested tuft on the ground, about 0.9 m across: the mop knocked over on its side like a dropped tassel, locks
-// spilling away along the grass, and the sawn-off end of the striped trunk sticking out of the crown so it reads as
-// "chopped off a tree". Two geometries: the mop (tinted) and the stub (trunk stripes).
+// A harvested tuft on the ground, about 0.9 m: a soft ball of fluff sitting slightly squashed on the grass, with the
+// sawn-off stub of striped trunk poking out of its underside so it reads as "cut off a tree".
+// Two geometries: the fluff (tinted) and the stub (trunk stripes).
+const PICKUP = { R: 1, axes: [1, 0.9, 1], lop: 0.12, peak: 0.35, forelock: 0 };
 function lyingTuft() {
-  const mop = tuftGeometry(11, 1).clone();
-  const spine = new THREE.CatmullRomCurve3([[0, 0.6, 0], [0.08, 1.9, 0], [0.35, 3.1, 0.1]].map((p) => new THREE.Vector3(...p)));
-  const stub = stripedTube(spine, 2.5, (u) => 0.3 - 0.05 * u, { stripe: 0.36, sides: 7, seed: 4 });
-  // The sawn face: a pale disc capping the stub.
-  const face = new THREE.CircleGeometry(0.26, 7).rotateX(-Math.PI / 2).rotateZ(-0.25).translate(0.35, 3.1, 0.1);
-  paint(face, (c) => c.set('#f7e7b4'));
+  const k = 0.9 / 2 / 1.25; // the full tuft is about 1.25 R across to the wisp tips
+  const fluff = tuftFull(PICKUP, 11, { wisps: 260 });
+  // Tip it over so the trunk end points sideways, then shrink it to size and squash it a little onto the ground.
+  const tilt = new THREE.Matrix4().makeRotationZ(1.1);
+  fluff.applyMatrix4(tilt);
+  // The stub, in the tuft's own units (the trunk tip is the origin): a short striped stick from inside the puff
+  // down and out of its underside, capped with a pale sawn face.
+  const sr = 0.05 / k, spine = new THREE.CatmullRomCurve3([v3(0, 0.4, 0), v3(0.02, -0.2, 0), v3(0.06, -0.75, 0.02)]);
+  const stub = stripedTube(spine, 1.15, () => sr, { stripe: 0.3, sides: 6, seed: 4 });
+  const face = paint(new THREE.CircleGeometry(sr * 1.02, 7).rotateX(Math.PI / 2).translate(0.06, -0.75, 0.02), (c) => c.set('#f7e7b4'));
   const stubGeo = merge([stub, face]);
-  // Knock both over: crown points along -x, hem along +x, sagging onto the ground.
-  const tip = new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.25);
-  mop.applyMatrix4(tip);
-  stubGeo.applyMatrix4(tip);
-  mop.computeBoundingBox();
-  const b = mop.boundingBox, k = 0.9 / Math.max(b.max.x - b.min.x, b.max.z - b.min.z);
-  const fit = new THREE.Matrix4().makeScale(k, k * 0.6, k);
-  mop.applyMatrix4(fit);
+  stubGeo.applyMatrix4(tilt);
+  const fit = new THREE.Matrix4().makeScale(k, k * 0.85, k);
+  fluff.applyMatrix4(fit);
   stubGeo.applyMatrix4(fit);
-  mop.computeBoundingBox();
-  const shift = new THREE.Matrix4().makeTranslation(-(mop.boundingBox.max.x + mop.boundingBox.min.x) / 2, -mop.boundingBox.min.y - 0.03, 0);
-  mop.applyMatrix4(shift);
+  fluff.computeBoundingBox();
+  const b = fluff.boundingBox;
+  const shift = new THREE.Matrix4().makeTranslation(-(b.max.x + b.min.x) / 2, -b.min.y - 0.04, -(b.max.z + b.min.z) / 2);
+  fluff.applyMatrix4(shift);
   stubGeo.applyMatrix4(shift);
-  return { mop, stub: stubGeo };
+  return { fluff, stub: stubGeo };
 }
 
 // A Truffula Fruit: a plump lumpy berry with a curly stalk, about 0.2 m.
@@ -414,17 +482,17 @@ function seedGeometry() {
 }
 
 let stumpGeo, lyingGeo, fruitGeo, seedGeo, saplingParts;
-const plain = () => toon('#ffffff', { vertexColors: true });
 let plainMat;
 
-// A knee-high baby tree: a short, wobbly striped stem with a tiny tuft.
+// A knee-high baby tree: a short, wobbly striped stem with a little round puff.
+const SAPLING = { R: 1, axes: [1, 1, 1], lop: 0.1, peak: 0.4, forelock: 0 };
 function sapling(color) {
   if (!saplingParts) {
     const height = 0.5;
-    const spine = new THREE.CatmullRomCurve3([[0, 0, 0], [0.03, 0.15, 0], [-0.02, 0.32, 0.01], [0.04, 0.5, 0]].map((p) => new THREE.Vector3(...p)));
+    const spine = new THREE.CatmullRomCurve3([[0, 0, 0], [0.03, 0.15, 0], [-0.02, 0.32, 0.01], [0.04, 0.5, 0]].map((p) => v3(...p)));
     saplingParts = {
-      trunk: stripedTube(spine, height, (u) => 0.04 - 0.015 * u, { stripe: 0.06, sides: 6, seed: 9 }),
-      tuft: tuftGeometry(5, 0.09), top: spine.getPoint(1, v3()),
+      trunk: stripedTube(spine, height, (u) => 0.022 - 0.008 * u, { stripe: 0.05, sides: 6, seed: 9 }),
+      tuft: tuftFull(SAPLING, 5, { wisps: 140 }).scale(0.13, 0.13, 0.13), top: spine.getPoint(1, v3()),
     };
   }
   const g = new THREE.Group();
@@ -435,19 +503,29 @@ function sapling(color) {
   return g;
 }
 
-export function build({ kind = 'tree', variant = 0, color = PALETTE.tufts[0] } = {}) {
+// kind: 'tree' (variant 0..5, lod 0 or 1), 'stump', 'tuft' (a harvested tuft on the ground), 'fruit', 'sapling', 'seed'.
+export function build({ kind = 'tree', variant = 0, color = TUFT_COLORS[0], lod = 0, variants, spacing = 7 } = {}) {
   const g = new THREE.Group();
-  plainMat ||= plain();
+  plainMat ||= toon('#ffffff', { vertexColors: true });
   if (kind === 'stump') g.add(new THREE.Mesh(stumpGeo ||= stumpGeometry(), trunkMaterial()));
   else if (kind === 'tuft') {
     lyingGeo ||= lyingTuft();
-    const mop = new THREE.Mesh(lyingGeo.mop, tuftTint(color));
-    mop.name = 'tuft';
-    g.add(mop, new THREE.Mesh(lyingGeo.stub, trunkMaterial()));
+    const fluff = new THREE.Mesh(lyingGeo.fluff, tuftTint(color));
+    fluff.name = 'tuft';
+    g.add(fluff, new THREE.Mesh(lyingGeo.stub, trunkMaterial()));
   }
   else if (kind === 'fruit') g.add(new THREE.Mesh(fruitGeo ||= fruitGeometry(), plainMat));
   else if (kind === 'seed') g.add(new THREE.Mesh(seedGeo ||= seedGeometry(), plainMat));
   else if (kind === 'sapling') return sapling(color);
-  else return tree(variant, color);
+  // For the art lab: every variant in a row, each in its own colour ('lineup'), or one variant at lod 0 beside lod 1.
+  else if (kind === 'lineup' || kind === 'lods') {
+    const list = kind === 'lods' ? [[variant, 0], [variant, 1]] : (variants || [0, 1, 2, 3, 4, 5]).map((v) => [v, lod]);
+    list.forEach(([v, l], i) => {
+      const t = tree(v, kind === 'lods' ? color : TUFT_COLORS[(v + i) % TUFT_COLORS.length], l);
+      t.position.x = (i - (list.length - 1) / 2) * spacing;
+      g.add(t);
+    });
+  }
+  else return tree(variant, color, lod);
   return g;
 }
