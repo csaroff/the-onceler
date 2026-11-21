@@ -8,14 +8,14 @@ Play it at https://csaroff.github.io/the-onceler/, or run it yourself:
     npm run dev        # then open the printed URL
 
 Controls: WASD move, Shift run, Space jump, click to swing the axe, right-click or F for the sling, E to use,
-B for the business menu, V for defences, C to make things, Q to close a menu, M to turn the music on and off.
+B for the business menu, V for defences, C to make things, H to drink Moose Juice, Q to close a menu, M to turn the music on and off.
 
 ## How it plays
 
 1. Chop a Truffula Tree. Its tufts fall where the tree lands; walk over them to pick them up.
 2. Carry them back to the shop and knit them into Thneeds on the stool, by hand.
 3. Passers-by buy a few from your counter. The town buys cartloads, but it is a kilometre east along the road.
-   Its vendors sell what you cannot get at home: keener axes, stronger slings, thicker coats, boots.
+   Its vendors sell what you cannot get at home: keener axes, stronger slings, thicker coats, boots, a ride, a tonic.
 4. Spend the money: a handcart, relatives to knit, a factory (in four sizes), wagons that sell for you, and
    Super-Axe-Hackers that fell four trees at a time.
 
@@ -33,6 +33,10 @@ The Lorax comes out of the first stump, once, up close. After that he is a figur
 - Knocked out in a charge, you wake at the shop a quarter poorer.
 - What you kill leaves something behind: pelts, feathers, scales, deadwood. Walk over them, and at the shop press C
   to make what no vendor sells: a Bar-ba-loot suit, Swomee-feather shoes, Humming-Fish scale shot, a stump-wood staff.
+  A champion also leaves a trophy, and a trophy makes the best things: a clawed axe, a plume cloak, a pearl charm.
+- Spoils build things as well: a deadwood palisade, and a scarecrow in a Bar-ba-loot pelt that they go for instead of you.
+- The wheelwright in town sells a One-Wheeler Wubble, which rolls you along the road much faster, and Moose Juice,
+  drunk with H when you are hurt.
 - Defences are walls, hedges and the guns of The Butter Battle Book.
 - His seat is far to the north-west (the compass shows it after the first raid). Kill him there and the war is over.
 - The game saves itself every ten seconds (in the browser's local storage) and offers to carry on next time;

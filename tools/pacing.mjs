@@ -23,7 +23,7 @@ const report = await page.evaluate(([limit, duels]) => {
   const pressed = () => foes().some((e) => away(e) < 30);
 
   const knockoutAt = [], income = [], hurtBy = {}, armies = [], warLog = [], duelLog = [];
-  let wreckedSeconds = 0, lastSold = 0, nextSample = 300, lastPhase = 'calm', trips = 0;
+  let drunk = 0, wreckedSeconds = 0, lastSold = 0, nextSample = 300, lastPhase = 'calm', trips = 0;
   const realDamage = p.damage, realKnockout = g.knockout;
   p.damage = (amount) => {
     const close = foes().filter((e) => away(e) < 25), kind = close.length ? near(close).kind : 'shot from afar';
@@ -48,6 +48,7 @@ const report = await page.evaluate(([limit, duels]) => {
       g.keys.KeyD = d < 30 && Math.floor(g.time * 0.8) % 2 === 0;
       g.keys.KeyA = d < 30 && !g.keys.KeyD;
     } else { g.keys.KeyD = false; g.keys.KeyA = false; g.keys.KeyS = false; }
+    if (p.health < p.maxHealth * 0.35 && g.business.drink()) drunk++;
     g.step(0.05);
     wreckedSeconds += g.business.units.filter((u) => u.broken).length * 0.05;
     const w = g.war;
@@ -106,12 +107,12 @@ const report = await page.evaluate(([limit, duels]) => {
   }
 
   // What to buy, in order. The bot saves for the next thing on the list. Guns go up beside the shop; gear means a trip to town.
-  const ORDER = ['cart', 'knitter', 'gear:axe', 'wagon', 'jigger', 'jigger', 'factory', 'gear:coat', 'hacker', 'knitter', 'gear:sling', 'knitter', 'wagon',
+  const ORDER = ['cart', 'knitter', 'gear:axe', 'gear:ride', 'wagon', 'jigger', 'jigger', 'factory', 'gear:coat', 'hacker', 'knitter', 'gear:sling', 'knitter', 'wagon',
     'factory', 'kickapoo', 'gear:axe', 'kickapoo', 'factory', 'gear:coat', 'wagon', 'hacker', 'sputter', 'factory', 'sputter', 'gear:axe', 'wagon',
     'boomblitz', 'gear:coat', 'hacker', 'boomblitz', 'gear:sling', 'gear:axe', 'gear:coat'];
   let bought = 0;
   const gearWanted = () => (ORDER[bought]?.startsWith('gear:') ? ORDER[bought].slice(5) : null);
-  const gearPrice = (id) => g.business.gear[id] !== undefined && ({ axe: [90, 400, 1500, 5000], sling: [70, 320, 1200, 4000], coat: [120, 500, 1800, 6000], boots: [200, 900] })[id][g.business.gear[id]];
+  const gearPrice = (id) => g.business.gear[id] !== undefined && ({ axe: [90, 400, 1500, 5000], sling: [70, 320, 1200, 4000], coat: [120, 500, 1800, 6000], boots: [200, 900], ride: [350, 1400] })[id][g.business.gear[id]];
   function shop() {
     while (bought < ORDER.length) {
       const id = ORDER[bought];
@@ -145,12 +146,15 @@ const report = await page.evaluate(([limit, duels]) => {
       hold(40, () => p.thneeds === 0);
     }
     for (let id = gearWanted(); id && g.stock.money >= gearPrice(id); id = gearWanted()) {
-      const vendor = places.vendors.find((v) => v.id === (id === 'axe' || id === 'sling' ? 'smith' : 'tailor'));
+      const vendor = places.vendors.find((v) => v.id === (id === 'ride' ? 'wright' : id === 'axe' || id === 'sling' ? 'smith' : 'tailor'));
       goTo(vendor.x + 2, vendor.z + 2, 3, 30);
       if (!g.business.buyGear(id)) break;
       mark(`gear: first ${id}`);
       bought++;
     }
+    // Never leave town without the bottles you can afford.
+    const wright = places.vendors.find((v) => v.id === 'wright');
+    if (g.business.gear.juice < 3 && g.stock.money >= 40) { goTo(wright.x + 2, wright.z + 2, 3, 30); while (g.business.buyGear('juice')) mark('first Moose Juice'); }
     alongRoad(false);
     goTo(3, 8, 3, 60);
     mark(`first trip took ${(minute() - left).toFixed(1)} min`);
@@ -161,7 +165,19 @@ const report = await page.evaluate(([limit, duels]) => {
     waitScene();
     tick(); // always let time pass, whatever the bot decides, so it can never spin on the spot
     shop();
-    if (g.crafting.atShop()) for (const r of g.crafting.recipes()) if (r.can && g.crafting.make(r.id)) mark(`made: first ${r.name}`);
+    if (g.crafting.atShop()) {
+      for (const r of g.crafting.recipes()) if (r.can && g.crafting.make(r.id)) mark(`made: first ${r.name}`);
+      // What is left over once everything is made goes into things built of spoils, round the shop.
+      const spare = g.crafting.recipes().every((r) => r.full || Object.keys(r.cost).some((k) => ['claw', 'plume', 'pearl'].includes(k)));
+      const count = (id) => g.defences.structures.filter((s) => s.def.id === id && !s.broken).length;
+      const want = count('scarecrow') < 1 ? 'scarecrow' : spare && count('palisade') < 8 ? 'palisade' : null;
+      if (want && Math.hypot(p.x, p.z) < 14) {
+        g.defences.select(want);
+        p.yaw = g.defences.structures.length * 0.9; g.step(0.05);
+        if (g.defences.place()) mark(`built: first ${want}`);
+        g.defences.select(null);
+      }
+    }
     const o = g.business.owned, w = g.war, automated = o.wagon > 0;
     const wreck = g.business.units.find((u) => u.broken && g.stock.money >= Math.round(u.base * 0.2));
     const gear = gearWanted();
@@ -220,7 +236,7 @@ const report = await page.evaluate(([limit, duels]) => {
     trace, marks, knockoutAt, income, hurtBy, armies, warLog, duelLog, trips, dead: g.dead, wreckedMinutes: +(wreckedSeconds / 60).toFixed(1),
     shopTufts: g.stock.tufts, shopThneeds: g.stock.thneeds, broken: g.business.units.filter((u) => u.broken).map((u) => u.kind),
     minutes: minute(), money: Math.round(g.stock.money), sold: g.stock.sold, felled: g.story.felled, raid: g.war.raid, owned: o, gear: g.business.gear,
-    guns: g.defences.structures.length, spoils: g.crafting.spoils, made: g.crafting.made, health: p.maxHealth, axe: p.axe, ruin: +g.ruin.toFixed(2),
+    guns: g.defences.structures.length, spoils: g.crafting.spoils, made: g.crafting.made, drunk, health: p.maxHealth, axe: p.axe, ruin: +g.ruin.toFixed(2),
   };
 }, [minutes, duels]);
 await browser.close();
@@ -231,7 +247,7 @@ console.log('minute  money  milestone');
 for (const [name, minute, money] of report.marks) console.log(`${String(minute).padStart(6)}  ${String('$' + money).padStart(6)}  ${name}`);
 console.log(`\nafter ${report.minutes} min${report.dead ? ' (DEAD)' : ''}: $${report.money}, ${report.sold} sold, ${report.felled} felled, ${report.raid} raids beaten, knocked out ${report.knockoutAt.length} times, ${report.guns} guns, ${report.trips} trips to town`);
 console.log('owned:', JSON.stringify(report.owned), 'gear:', JSON.stringify(report.gear), `axe ${report.axe}, health ${report.health}`);
-console.log('spoils:', JSON.stringify(report.spoils), 'made:', JSON.stringify(report.made));
+console.log('spoils:', JSON.stringify(report.spoils), 'made:', JSON.stringify(report.made), `bottles drunk: ${report.drunk}`);
 console.log(`at the shop: ${report.shopTufts} tufts, ${report.shopThneeds} Thneeds; wrecked now: ${report.broken.join(', ') || 'nothing'}; machine-minutes spent wrecked: ${report.wreckedMinutes}`);
 console.log(`Thneeds sold per five minutes: ${report.income.join(', ')}`);
 console.log(`knocked out at minutes: ${report.knockoutAt.join(', ') || 'never'}`);
