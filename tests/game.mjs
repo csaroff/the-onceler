@@ -54,6 +54,17 @@ export async function openGame({ query = '?test', start = true } = {}) {
         for (const tuft of [...g.business.pickups]) { if (g.player.tufts >= g.player.maxTufts) break; this.stand(tuft.x, tuft.z, tuft.x + 1, tuft.z); }
         this.stand(2, 6, 0, 0);
       },
+      // A wide flat dry place, a long way from anything, for a fight with nothing in the way.
+      field() {
+        for (let r = 300; r < 1500; r += 20) for (let a = 0; a < 6.28; a += 0.1) {
+          const x = Math.cos(a) * r, z = Math.sin(a) * r;
+          if (land.height(x, z) < land.LAKE_Y + 3 || !land.isWild(x, z, 60)) continue;
+          let flat = true;
+          for (let b = 0; b < 6.28 && flat; b += 0.5) for (const d of [8, 16, 28]) if (land.steepness(x + Math.cos(b) * d, z + Math.sin(b) * d) > 0.25 || land.height(x + Math.cos(b) * d, z + Math.sin(b) * d) < land.LAKE_Y + 2) { flat = false; break; }
+          if (flat) return { x, z };
+        }
+        return null;
+      },
       // The nearest cliff to a spot: the foot of it (flat, dry), the top of it, and which way is uphill.
       findCliff(nearX = 0, nearZ = 0) {
         for (let r = 120; r < 900; r += 8) for (let a = 0; a < 6.28; a += 0.06) {
