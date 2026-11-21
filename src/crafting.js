@@ -12,6 +12,10 @@ export const SPOILS = {
   claw: { name: 'champion claw', plural: 'champion claws', from: "The Bar-ba-loot Champion's claws", trophy: true },
   plume: { name: 'champion plume', plural: 'champion plumes', from: "The Swomee-Swan Champion's plume", trophy: true },
   pearl: { name: 'champion pearl', plural: 'champion pearls', from: "The Humming-Fish Champion's pearl", trophy: true },
+  // Finds: not left by anything, but taken from the rare places far out in the land (see sites.js).
+  goldtuft: { name: 'golden tuft', plural: 'golden tufts' },
+  shard: { name: 'shard of old ice', plural: 'shards of old ice' },
+  reed: { name: 'humming-reed', plural: 'humming-reeds' },
 };
 // Which enemy leaves what. A champion leaves a heap of it.
 const LEAVES = { loot: 'pelt', lobber: 'pelt', swan: 'feather', fish: 'scale', wight: 'deadwood', glupp: 'deadwood', lootChampion: 'pelt', swanChampion: 'feather', fishChampion: 'scale' };
@@ -28,6 +32,10 @@ export const RECIPES = [
   { id: 'claws', name: 'Clawed axe', blurb: 'every blow lands harder', cost: { claw: 1, deadwood: 15 }, most: 3 },
   { id: 'cloak', name: 'Plume cloak', blurb: 'no fall can hurt you', cost: { plume: 1, feather: 10 }, most: 1 },
   { id: 'charm', name: 'Pearl charm', blurb: 'knocked out, you keep your money', cost: { pearl: 1, scale: 4 }, most: 1 },
+  // And these need something from far afield: every one of them is a journey.
+  { id: 'gilt', name: 'Gilded coat', blurb: 'you can take a good deal more of a beating', cost: { goldtuft: 3, pelt: 10 }, most: 3 },
+  { id: 'frost', name: 'Frost-bitten axe', blurb: 'what you hit is chilled, and comes on slowly', cost: { shard: 3, deadwood: 10 }, most: 3 },
+  { id: 'pack', name: 'Reed pack', blurb: 'you carry half as much again', cost: { reed: 3, feather: 5 }, most: 3 },
 ];
 
 const mat = { claw: toon('#efe6cf'), pearl: toon('#ffffff'), pink: toon('#ffc9e6'), fur: toon(PALETTE.loot), belly: toon(PALETTE.lootBelly), feather: toon(PALETTE.swan), quill: toon(PALETTE.paper), scale: toon('#ffd23c'), shine: toon('#fff3b8'), wood: toon('#8b8478'), dark: toon(PALETTE.trunkDark) };
@@ -61,8 +69,8 @@ function model(kind) {
 
 export function createCrafting(g) {
   const { scene } = g;
-  const spoils = { pelt: 0, feather: 0, scale: 0, deadwood: 0, claw: 0, plume: 0, pearl: 0 };
-  const made = { suit: 0, shoes: 0, shot: 0, staff: 0, claws: 0, cloak: 0, charm: 0 };
+  const spoils = { pelt: 0, feather: 0, scale: 0, deadwood: 0, claw: 0, plume: 0, pearl: 0, goldtuft: 0, shard: 0, reed: 0 };
+  const made = { suit: 0, shoes: 0, shot: 0, staff: 0, claws: 0, cloak: 0, charm: 0, gilt: 0, frost: 0, pack: 0 };
   const pickups = [];
   const told = new Set();
 

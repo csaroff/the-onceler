@@ -14,6 +14,7 @@ import { createLorax } from './lorax.js';
 import { createDefences, DEFENCES } from './defences.js';
 import { createScenes } from './scenes.js';
 import { createCrafting } from './crafting.js';
+import { createSites } from './sites.js';
 import { height, clamp, smooth, dist, SHOP, TOWN, THRONE, FACTORY } from './terrain.js';
 import * as land from './terrain.js';
 
@@ -57,6 +58,7 @@ g.lorax = createLorax(g);
 g.defences = createDefences(g);
 g.scenes = createScenes(g);
 g.crafting = createCrafting(g);
+g.sites = createSites(g);
 g.world.settle(g.player.x, g.player.z); // all the land round the shop, before the first picture
 g.wildlife.populate();
 
@@ -106,7 +108,7 @@ g.snapshot = () => ({
   stock: { ...g.stock }, seen: [...g.story.seen], felled: g.story.felled, ruin: g.ruin, ended: g.ended,
   felledTrees: g.world.felled(),
   player: { x: g.player.x, z: g.player.z, yaw: g.player.yaw, tufts: g.player.tufts, thneeds: g.player.thneeds },
-  owned: { ...g.business.owned }, wrecks: g.business.wrecks(), gear: { ...g.business.gear }, defences: g.defences.snapshot(), crafting: g.crafting.snapshot(), war: g.war.snapshot(), emptied: g.wildlife.emptied,
+  owned: { ...g.business.owned }, wrecks: g.business.wrecks(), gear: { ...g.business.gear }, defences: g.defences.snapshot(), crafting: g.crafting.snapshot(), sites: g.sites.snapshot(), war: g.war.snapshot(), emptied: g.wildlife.emptied,
 });
 
 // Apply a snapshot to a freshly started game.
@@ -122,6 +124,7 @@ g.restore = (d) => {
   for (const [id, count] of Object.entries(d.gear || {})) for (let i = 0; i < count; i++) g.business.buyGear(id, true);
   g.business.setWrecks(d.wrecks);
   g.crafting.restore(d.crafting);
+  g.sites.restore(d.sites);
   g.defences.restore(d.defences);
   g.wildlife.restore(d.emptied);
   g.war.restore(d.war);
@@ -190,7 +193,7 @@ function menuHtml() {
     const home = g.crafting.atShop();
     return '<h3>Make</h3>' + g.crafting.recipes().map((r, i) => {
       const price = r.full ? (r.most > 1 ? 'no better to be made' : 'made') : g.crafting.billText(r.cost);
-      return `<div class="${r.can && home ? '' : 'off'}">[${i + 1}] ${r.name} · ${price} · ${r.blurb}${r.made ? ` (${r.made})` : ''}</div>`;
+      return `<div class="${r.can && home ? '' : 'off'}">[${(i + 1) % 10}] ${r.name} · ${price} · ${r.blurb}${r.made ? ` (${r.made})` : ''}</div>`;
     }).join('') + `<div>${home ? '' : 'made at your shop, not out here · '}[C] close</div>`;
   }
   if (menu === 'vendor') {
@@ -221,6 +224,7 @@ function updateCompass() {
   if (g.war.raid >= 1 && !g.war.won) marks.push({ label: 'his seat', rel: bearing(THRONE.x, THRONE.z), cls: 'place' });
   // While he is showing himself, the compass says which way to look.
   if (g.lorax.state === 'watch' || g.lorax.state === 'command') marks.push({ label: 'the Lorax', rel: bearing(g.lorax.x, g.lorax.z), cls: 'danger' });
+  for (const s of g.sites.marks()) marks.push({ label: s.label, rel: bearing(s.x, s.z), cls: 'place' });
   if (g.war.champion) marks.push({ label: 'champion', rel: bearing(g.war.champion.x, g.war.champion.z), cls: 'danger' });
   // Labels in the same direction would print on top of each other: each one that crowds the last goes a line higher.
   const named = marks.filter((m) => m.cls).sort((x, y) => x.rel - y.rel);
@@ -237,7 +241,7 @@ function updateScreen() {
   const juice = g.business.gear.juice ? `Moose Juice: ${g.business.gear.juice} · [H] to drink<br>` : '';
   const spoils = g.crafting.carrying();
   ui.status(`${carrying ? `Carrying ${carrying}<br>` : ''}${juice}${spoils ? `Spoils: ${spoils}<br>` : ''}At the shop: ${stock.tufts} tufts, ${stock.thneeds} Thneeds<br>${g.story.felled.toLocaleString()} trees felled`);
-  ui.hint(g.scenes.active ? '' : g.defences.hint() || g.business.hint());
+  ui.hint(g.scenes.active ? '' : g.defences.hint() || g.sites.hint() || g.business.hint());
   ui.menu(g.scenes.active ? '' : menuHtml());
   ui.health(player.health / player.maxHealth);
   const boss = war.bossBar();
@@ -267,7 +271,8 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyQ' || e.code === 'Escape') { menu = null; g.defences.select(null); }
   if (e.code === 'KeyF') g.player.fireSling();
   if (e.code === 'KeyH') g.business.drink();
-  const digit = /^Digit([1-9])$/.exec(e.code);
+  const digit = /^Digit([0-9])$/.exec(e.code);
+  if (digit) digit[1] = digit[1] === '0' ? 10 : Number(digit[1]); // [0] is the tenth thing in a list
   if (digit && menu === 'business') { const item = g.business.items()[digit[1] - 1]; if (item) g.business.buy(item.id); }
   if (digit && menu === 'craft') { const r = g.crafting.recipes()[digit[1] - 1]; if (r) g.crafting.make(r.id); }
   if (digit && menu === 'vendor') { const item = g.business.gearItems()[digit[1] - 1]; if (item) g.business.buyGear(item.id); }
@@ -335,7 +340,7 @@ g.step = (dt) => {
     // The world carries on behind a cutscene, but nothing can hurt you and nothing is bought or sold.
   } else if (g.started) {
     g.player.update(dt, keys);
-    if (pressed.has('KeyE') && g.defences.use()) pressed.delete('KeyE');
+    if (pressed.has('KeyE') && (g.defences.use() || g.sites.use())) pressed.delete('KeyE');
     g.business.use(dt, !!keys.KeyE, pressed.has('KeyE'));
   } else {
     // Title screen: a slow look around from the road.
@@ -346,6 +351,7 @@ g.step = (dt) => {
 
   g.business.update(dt);
   g.crafting.update(dt);
+  g.sites.update(dt);
   g.wildlife.update(dt);
   g.war.update(dt);
   g.lorax.update(dt);

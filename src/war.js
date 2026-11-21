@@ -238,6 +238,8 @@ export function createWar(g) {
       const dx = e.x - x, dz = e.z - z, d = Math.hypot(dx, dz);
       if (d > 3.3 + e.def.size || Math.abs(e.y - g.player.y) > 3.5 || (dx * dir.x + dz * dir.z) / (d || 1) < 0.3) continue;
       hurt(e, g.player.axe, x, z);
+      // A frost-bitten axe chills what it lands on: it comes on at less than half its pace. Champions shake it off sooner.
+      if (g.player.chill) e.slow = Math.max(e.slow, (2 + g.player.chill) * (e.def.boss ? 0.5 : 1));
       hits++;
     }
     if (hits) g.audio.hit();

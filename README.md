@@ -30,10 +30,17 @@ The Lorax comes out of the first stump, once, up close. After that he is a figur
   and the game starts over. Stay put, and the whole line charges.
 - He commands from the spire for as long as the raid lasts: he sends reserves down and raises the stumps as his dead.
   Reach the spire and he is gone, and nothing more comes down.
-- Knocked out in a charge, you wake at the shop a quarter poorer.
+- Knocked out in a charge, you wake at the shop a quarter poorer, and he leaves you be for four minutes.
+- Stand by one of your Thneed Wagons and press E to hop on: it carries you to town and back.
+- Super-Axe-Hackers fell trees as you do, and sweep up the tufts with a brush.
 - What you kill leaves something behind: pelts, feathers, scales, deadwood. Walk over them, and at the shop press C
   to make what no vendor sells: a Bar-ba-loot suit, Swomee-feather shoes, Humming-Fish scale shot, a stump-wood staff.
   A champion also leaves a trophy, and a trophy makes the best things: a clawed axe, a plume cloak, a pearl charm.
+- Out in the land, a long walk from home, are golden Truffulas, the stumps of his old ice spires, and beds of
+  humming-reeds. The compass shows one when you are within 320 m. Each gives three of something once, and those make
+  a gilded coat, a frost-bitten axe and a reed pack.
+- Each champion has a move of its own: one slams the ground (jump), one dives three times running (run), one marks
+  the ground under you and lands on it (turn and run). After it, the champion is stuck for a moment.
 - Spoils build things as well: a deadwood palisade, and a scarecrow in a Bar-ba-loot pelt that they go for instead of you.
 - The wheelwright in town sells a One-Wheeler Wubble, which rolls you along the road much faster, and Moose Juice,
   drunk with H when you are hurt.
@@ -51,6 +58,7 @@ Every line of dialogue is from the book and lives in `src/quotes.js`.
 - `src/world.js`: ground, sky, plants and trees, and how they decay
 - `src/player.js`, `src/business.js`, `src/wildlife.js`, `src/war.js`, `src/lorax.js`, `src/defences.js`, `src/scenes.js`
 - `src/crafting.js`: what the animals leave behind, and what is made of it
+- `src/sites.js`: the rare places far out in the land
 - `src/audio.js`, `src/music.js`: synthesised sound effects, and the background waltz written out as notes
 - `src/art/`: one file per subject; every model is built in code. `docs/ART.md` is the brief.
 - `src/ink.js`, `src/toon.js`: the drawing style (flat colour, pen outline)

@@ -478,8 +478,8 @@ export function createBusiness(g) {
   const vendorNearby = () => vendors.find((v) => dist(v.x, v.z, g.player.x, g.player.z) < 6);
   // What you carry and how hard you hit follow from what you have bought.
   function applyGear() {
-    const p = g.player, load = (owned.cart ? 3 : 1) * (1 + gear.boots);
-    const made = g.crafting?.made || {}; // what you have made of the animals' spoils counts too (see crafting.js)
+    const made = g.crafting?.made || {};
+    const p = g.player, load = (owned.cart ? 3 : 1) * (1 + gear.boots) * (1 + (made.pack || 0) * 0.5); // what you have made of the animals' spoils counts too (see crafting.js)
     p.axe = 2 + gear.axe * 1.5 + (made.claws || 0) * 1.5;
     p.ride = 1 + gear.ride * 0.5;   // how much faster you go on the road
     p.featherFall = made.cloak > 0;
@@ -488,7 +488,8 @@ export function createBusiness(g) {
     p.pace = 1 + (made.shoes || 0) * 0.08;
     p.mend = 1 + (made.staff || 0);
     p.slingRest = 0.85 - gear.sling * 0.1;
-    const grown = 10 + gear.coat * 6 - p.maxHealth;
+    p.chill = made.frost || 0;      // seconds-ish a blow of the axe slows what it lands on
+    const grown = 10 + gear.coat * 6 + (made.gilt || 0) * 8 - p.maxHealth;
     p.maxHealth += grown; p.health += Math.max(0, grown);
     p.maxTufts = 4 * load; p.maxThneeds = 8 * load;
   }

@@ -14,7 +14,7 @@ export function createPlayer(g) {
     x: 5, z: 11, y: 0, vy: 0, yaw: 0.42, pitch: 0, // standing on the road, looking at the shop
     health: 10, maxHealth: 10, lastHurt: -99, hurt: 0,
     armour: 1, pace: 1, mend: 1, ride: 1, featherFall: false,
-    mount: null, // the Thneed Wagon you are riding, if you are // changed by what you make of the animals' spoils
+    chill: 0, mount: null, // the Thneed Wagon you are riding, if you are // changed by what you make of the animals' spoils
     axe: 2, slingDamage: 1, slingRest: 0.85, // what a blow and a slung rock do; better ones are sold in town
     tufts: 0, thneeds: 0, maxTufts: 4, maxThneeds: 8,
     swing: 0, struck: true, sling: 0, shot: true, slingCooldown: 0,
