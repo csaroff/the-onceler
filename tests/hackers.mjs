@@ -41,7 +41,9 @@ console.log(`one hacker felled ${one.felled}; three felled ${three.felled} and w
 // They keep out of each other's way...
 assert.ok(three.stacked < 0.05, `three hackers were on top of each other ${(three.stacked * 100).toFixed(0)}% of the time`);
 // ...and so each one pulls its weight.
-assert.ok(three.felled >= one.felled * 2.6, `three hackers felled ${three.felled} trees, one felled ${one.felled}: that is ${(three.felled / one.felled).toFixed(1)} machines' work`);
+// (Tufts land at random spots and each hacker sweeps its own up before the next tree, so a five-minute count varies
+// by a few trees either way: one hacker fells 48 to 57. Stacked hackers managed well under two machines' work.)
+assert.ok(three.felled >= one.felled * 2.4, `three hackers felled ${three.felled} trees, one felled ${one.felled}: that is ${(three.felled / one.felled).toFixed(1)} machines' work`);
 
 assert.deepEqual(errors, [], 'no page errors');
 await browser.close();
