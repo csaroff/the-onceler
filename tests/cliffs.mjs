@@ -51,6 +51,25 @@ assert.ok(over, `the raid ends when none of them can get to you (still ${await r
 assert.equal((await read()).health, 10, 'and nobody touched you');
 assert.equal((await read()).raid, 1, 'holding ground they cannot take counts as seeing them off');
 
+// ---- Answer a champion and then get out of its reach, and the duel must not hang either. It loses heart and goes; the
+// army that was holding its line for the duel has no reason to hold any longer, and comes.
+await run(`g.war.bearing = Math.atan2(cliff.foot.x - g.player.x, cliff.foot.z - g.player.z); g.war.muster();
+  const c = g.war.champion; g.war.hurt(c, 0.1, g.player.x, g.player.z); // a slung stone: the challenge is answered
+  c.x = cliff.foot.x; c.z = cliff.foot.z; c.best = Infinity;`);
+assert.equal((await read()).phase, 'duel', 'the duel is on');
+assert.ok(await run("return t.until(() => g.war.phase !== 'duel', 150)"), 'a duel the champion cannot fight does not go on for ever');
+assert.equal((await read()).champion, false, 'the champion has gone');
+assert.ok(await run("return t.until(() => g.war.phase === 'calm', 400)"), 'and the raid plays out to its end');
+
+// A champion that fights from a distance is fighting, though: spitting at you is not standing about. The Humming-Fish
+// champion never closes, and must not lose heart for that.
+await run(`g.war.clear(); for (const e of g.war.enemies) e.hp = 0; t.run(3);
+  const p = g.player, flat = cliff.top; t.stand(flat.x + cliff.ux * 30, flat.z + cliff.uz * 30, flat.x + cliff.ux * 60, flat.z + cliff.uz * 60);
+  window.spitter = g.war.spawn('fishChampion', p.x + cliff.ux * 14, p.z + cliff.uz * 14);
+  for (let i = 0; i < 90 * 20 && spitter.hp > 0; i++) { p.health = p.maxHealth; g.step(0.05); }`);
+assert.ok(await run('return g.war.enemies.includes(spitter)'), 'after a minute and a half of spitting at you it is still there');
+await run('g.war.hurt(spitter, 9999, 0, 0); t.run(3)');
+
 // ---- Backing away is slow: four seconds backwards covers about half what four seconds forwards does.
 await run('t.stand(0, 60, 0, 0)');
 await run("t.hold('KeyW', 4)");
