@@ -29,7 +29,10 @@ await run('const T = land.THRONE; t.stand(T.x + 50, T.z, T.x, T.z); t.run(2)');
 s = await read();
 assert.equal(s.finale, true, 'he comes for you');
 assert.match(await page.locator('#boss').innerText(), /The Lorax/);
+// (For the picture, step round to one side so that his guard is not standing in front of him.)
+await run('const k = g.war.king, here = { x: g.player.x, z: g.player.z }; t.stand(k.x + 4, k.z + 13, k.x, k.z); g.player.pitch = 0.08; g.step(0.02); window.here = here');
 await shot('throne-2-he-gets-down');
+await run('const T = land.THRONE; t.stand(here.x, here.z, T.x, T.z)');
 // He throws his spear from a long way off, and he raises the dead as he comes.
 await run('g.player.damage = () => {}');
 assert.ok(await run("return t.until(() => g.war.enemies.some((e) => e.kind === 'wight' || e.kind === 'glupp'), 40)"), 'he raises the dead out of the ground');
