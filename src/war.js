@@ -26,6 +26,7 @@ export const KINDS = {
   fishChampion: { art: fishArt, opts: { variant: 'champion' }, species: 'fish', hp: 80, speed: 3, dmg: 2.5, range: 22, cooldown: 2.8, size: 1.6, gait: 'walk', shot: 'glob', volley: 3, boss: 'The Humming-Fish Champion' },
   king: { art: loraxArt, opts: {}, scale: 2, hp: 320, speed: 3.4, dmg: 4, range: 34, cooldown: 2.4, size: 1.4, gait: 'walk', shot: 'glob', attack: 'hurl', swing: 1.2, splash: 2.5, raises: true, boss: 'The Lorax' },
 };
+const BEATEN_CALM = 240;       // seconds of peace after an army has knocked you out
 export const TRUCE = 50;        // seconds the champion waits between the lines before the army loses patience
 export const LEAVE_SHARE = 0.6; // the share of an army that goes home when its champion falls
 
@@ -566,7 +567,8 @@ export function createWar(g) {
   war.clear = () => {
     const raided = ['muster', 'duel', 'parley', 'fight'].includes(war.phase);
     unseat();
-    Object.assign(war, { champion: null, duel: false, phase: 'calm', calm: 60, threat: raided ? 0 : war.threat, field: null, reserves: 0 });
+    // After an army has beaten you he leaves you be for four minutes: long enough to get to town and back, or to build.
+    Object.assign(war, { champion: null, duel: false, phase: 'calm', calm: raided ? BEATEN_CALM : Math.max(war.calm, 60), threat: raided ? 0 : war.threat, field: null, reserves: 0 });
     g.lorax.vanish();
   };
 

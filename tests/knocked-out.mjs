@@ -23,7 +23,12 @@ assert.equal(s.raid, 0, 'you did not beat that raid');
 
 // Your machines go on felling while you are out cold, so the trees to answer for pile up again at once. Even so he
 // gives a beaten man time to get to town and back and arm himself: nothing stirs for three minutes.
-await run('t.clearcut(5, 11, 40)');
+// (They fell a long way from the shop, so no animal near you has lost its tree: this is about the army.)
+await run('t.clearcut(260, 240, 40)');
+assert.ok(await run('return g.war.threat >= 40'), 'plenty to answer for');
+// Being knocked down by the animals that live here in the meantime does not bring him any sooner.
+const calm = await run('const before = g.war.calm; g.war.clear(); return [before, g.war.calm]');
+assert.ok(calm[0] > 200 && calm[1] === calm[0], `a local knockout leaves the peace as long as it was (${calm.map(Math.round)})`);
 await run('t.run(180)');
 s = await read();
 assert.equal(s.phase, 'calm', 'three minutes on, he has not so much as shown himself');
