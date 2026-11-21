@@ -40,6 +40,9 @@ assert.deepEqual(again.around, felled.around, 'and the same trees stand round it
 await run('g.story.seen.add("firstTree"); const w = t.woods(600, 900); window.wood = w; t.stand(w.x, w.z, w.x + 1, w.z); t.clearcut(w.x, w.z, 400); t.run(25)');
 let s = await read();
 assert.ok(s.ruin > 0.5, `standing in the clearing, the world has soured (ruin ${s.ruin.toFixed(2)})`);
+// You are standing on dry ground 23 m above the nearest water, looking level. None of the view is water.
+const wet = await run('g.player.pitch = 0; g.step(0.02); return t.waterShare()');
+assert.ok(wet < 0.05, `the ground in front of you is ground (${(wet * 100).toFixed(0)}% of it is drawn as water)`);
 await shot('wilds-2-clearing');
 await run('const w = t.woods(wood.x + 900, wood.z); t.stand(w.x, w.z, w.x + 1, w.z); t.run(25)');
 s = await read();

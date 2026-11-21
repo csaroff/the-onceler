@@ -67,6 +67,19 @@ export async function openGame({ query = '?test', start = true } = {}) {
         }
         return null;
       },
+      // Draw the view and say what share of the lower half of the picture is water-blue.
+      waterShare() {
+        g.render();
+        const gl = document.querySelector('canvas').getContext('webgl2'), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, px = new Uint8Array(w * h * 4);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        let blue = 0, all = 0;
+        for (let y = Math.floor(h * 0.12); y < h * 0.45; y += 6) for (let x = 0; x < w; x += 6) {
+          const i = (y * w + x) * 4;
+          all++;
+          if (px[i + 2] > px[i] + 25 && px[i + 2] > px[i + 1]) blue++;
+        }
+        return blue / all;
+      },
       read() {
         const { stock, player, war, lorax, business, wildlife, story } = g;
         return {
