@@ -39,10 +39,13 @@ const report = await page.evaluate((limit) => {
         p.pitch = Math.atan2(e.y + 1 - p.y - 1.7, d);
         g.click(d < 4.5 + e.def.size ? 0 : 2);
       }
+      // A lieutenant winding up a swing is the cue to run backwards out of its reach.
+      const windingUp = f.some((b) => b.def.boss && b.def.reach && b.state === 'attack' && !b.struck);
+      g.keys.KeyS = windingUp; g.keys.ShiftLeft = windingUp || g.keys.ShiftLeft;
       // Nobody stands still while being dived at: step from side to side.
       g.keys.KeyD = d < 30 && Math.floor(g.time * 0.8) % 2 === 0;
       g.keys.KeyA = d < 30 && !g.keys.KeyD;
-    } else { g.keys.KeyD = false; g.keys.KeyA = false; }
+    } else { g.keys.KeyD = false; g.keys.KeyA = false; g.keys.KeyS = false; }
     g.step(0.05);
     if (p.health > lastHealth + 5) { knockouts++; knockoutAt.push(`${(g.time / 60).toFixed(1)} (wave ${g.war.wave})`); }
     if (g.war.wave !== lastWave) { lastWave = g.war.wave; waveSizes.push(`${g.war.wave}:${foes().length}`); }
@@ -126,7 +129,15 @@ const report = await page.evaluate((limit) => {
     } else if (g.war.challenge && !g.war.duel && p.health >= 9) {
       doing('duel');
       goTo(g.war.challenge.x + 10, g.war.challenge.z, 3, 90);
-      for (let i = 0; i < 4000 && g.war.challenge; i++) { const c = g.war.challenge; if (Math.hypot(c.x - p.x, c.z - p.z) > 4.5 + c.def.size) { g.keys.KeyW = true; } else g.keys.KeyW = false; tick(); }
+      let begun = false;
+      for (let i = 0; i < 4000 && g.war.challenge; i++) {
+        const c = g.war.challenge;
+        if (g.war.duel) begun = true;
+        else if (begun) break; // knocked out or driven off: the duel is over for now
+        if (c.state === 'wait') { p.yaw = Math.atan2(p.x - c.x, p.z - c.z); p.pitch = 0; } // tick() only aims at things that are attacking
+        g.keys.KeyW = !g.keys.KeyS && Math.hypot(c.x - p.x, c.z - p.z) > 4.5 + c.def.size;
+        tick();
+      }
       g.keys.KeyW = false;
     } else if (p.thneeds > 0 && !automated) {
       doing('sell in town');

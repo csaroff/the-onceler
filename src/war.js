@@ -15,13 +15,13 @@ const KINDS = {
   lobber: { art: barbaloot, opts: { variant: 'feral' }, hp: 2, speed: 4.6, dmg: 1, range: 17, cooldown: 2.8, size: 0.6, gait: 'run', shot: 'fruit', attack: 'throw' },
   swan: { art: swanArt, opts: { variant: 'smogged' }, hp: 2, speed: 10, dmg: 1, size: 0.9, flies: 9, gait: 'fly' },
   fish: { art: fishArt, opts: { variant: 'gummed' }, hp: 6, speed: 2.7, dmg: 1.5, range: 16, cooldown: 3, size: 0.7, gait: 'walk', shot: 'glob' },
-  stumper: { art: horrors, opts: { kind: 'stumper' }, hp: 4, speed: 6.5, dmg: 2, reach: 2, cooldown: 1.2, size: 0.9, gait: 'walk' },
+  stumper: { art: horrors, opts: { kind: 'stumper' }, hp: 4, speed: 6.5, dmg: 1.5, reach: 2, cooldown: 1.2, size: 0.9, gait: 'walk' },
   glupp: { art: horrors, opts: { kind: 'glupp' }, hp: 16, speed: 2.2, dmg: 4, reach: 2.6, cooldown: 2, size: 1.3, gait: 'walk' },
   smogulous: { art: horrors, opts: { kind: 'smogulous' }, hp: 8, speed: 4, dmg: 1, range: 9, cooldown: 1.6, size: 1.5, gait: 'walk', shot: null },
   lootBoss: { art: barbaloot, opts: { variant: 'lieutenant' }, hp: 36, speed: 4.4, dmg: 3, reach: 3.6, cooldown: 2.2, size: 1.5, gait: 'walk', swing: 1.2, boss: 'The Bar-ba-loot Lieutenant' },
   swanBoss: { art: swanArt, opts: { variant: 'lieutenant' }, hp: 40, speed: 12, dmg: 3, size: 2.4, flies: 12, gait: 'fly', boss: 'The Swomee-Swan Lieutenant' },
   fishBoss: { art: fishArt, opts: { variant: 'lieutenant' }, hp: 48, speed: 2.6, dmg: 1.5, range: 20, cooldown: 3.2, size: 1.6, gait: 'walk', shot: 'glob', volley: 3, boss: 'The Humming-Fish Lieutenant' },
-  biggerer: { art: horrors, opts: { kind: 'biggerer' }, hp: 140, speed: 3, dmg: 5, reach: 6, cooldown: 3, size: 3.2, gait: 'walk', swing: 1.4, boss: 'The Biggerer', brood: 'stumper' },
+  biggerer: { art: horrors, opts: { kind: 'biggerer' }, hp: 100, speed: 3, dmg: 4, reach: 6, cooldown: 3, size: 3.2, gait: 'walk', swing: 1.4, boss: 'The Biggerer', brood: 'stumper' },
 };
 // What each stage of the war sends, and who leads it.
 const STAGES = [
@@ -206,7 +206,7 @@ export function createWar(g) {
     }
     if (def.brood) {
       e.brood -= dt;
-      if (e.brood <= 0) { e.brood = 11; for (let i = 0; i < 2; i++) spawn(def.brood, e.x + rand(-4, 4), e.z + rand(-4, 4)); }
+      if (e.brood <= 0) { e.brood = 14; spawn(def.brood, e.x + rand(-4, 4), e.z + rand(-4, 4)); }
     }
   }
 
