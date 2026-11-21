@@ -1,6 +1,6 @@
 // You: a pair of long green arms, an axe, a sling, and whatever you can carry.
 import * as handsArt from './art/hands.js';
-import { height, steepness, STEEP, LAKE_Y } from './terrain.js';
+import { roadDistance, height, steepness, STEEP, LAKE_Y } from './terrain.js';
 
 const EYE = 1.7, WALK = 6.5, RUN = 11.5, BACKWARDS = 0.5, REACH = 4.6, SWING_SECONDS = 0.55, SLING_SECONDS = 0.6;
 const SAFE_FALL = 13; // metres a second you can land at without being hurt: a drop of about three and a half metres
@@ -13,7 +13,7 @@ export function createPlayer(g) {
   const p = {
     x: 5, z: 11, y: 0, vy: 0, yaw: 0.42, pitch: 0, // standing on the road, looking at the shop
     health: 10, maxHealth: 10, lastHurt: -99, hurt: 0,
-    armour: 1, pace: 1, mend: 1, // changed by what you make of the animals' spoils
+    armour: 1, pace: 1, mend: 1, ride: 1, featherFall: false, // changed by what you make of the animals' spoils
     axe: 2, slingDamage: 1, slingRest: 0.85, // what a blow and a slung rock do; better ones are sold in town
     tufts: 0, thneeds: 0, maxTufts: 4, maxThneeds: 8,
     swing: 0, struck: true, sling: 0, shot: true, slingCooldown: 0,
@@ -86,7 +86,8 @@ export function createPlayer(g) {
       const loaded = p.tufts >= p.maxTufts || p.thneeds >= p.maxThneeds, wading = height(p.x, p.z) < LAKE_Y - 0.3;
       // Walking backwards is slow and cannot be hurried: you cannot outrun what is chasing you while facing it.
       const pace = forward < 0 ? WALK * BACKWARDS : keys.ShiftLeft || keys.ShiftRight ? RUN : WALK;
-      const speed = pace * p.pace * (loaded ? 0.85 : 1) * (wading ? 0.5 : 1), dir = p.facing();
+      const riding = forward > 0 && roadDistance(p.x, p.z) < 8 ? p.ride : 1; // wheels are for the road, and for going forwards
+      const speed = pace * p.pace * riding * (loaded ? 0.85 : 1) * (wading ? 0.5 : 1), dir = p.facing();
       const mx = ((dir.x * forward - dir.z * strafe) / len) * speed * dt, mz = ((dir.z * forward + dir.x * strafe) / len) * speed * dt;
       // Blocked straight ahead: slide along whichever way is open.
       if (open(p.x + mx, p.z + mz)) { p.x += mx; p.z += mz; }
@@ -100,7 +101,7 @@ export function createPlayer(g) {
     p.y += p.vy * dt;
     if (p.y <= ground) {
       // Coming down hard hurts: walk off a cliff and you may not get up.
-      if (p.vy < -SAFE_FALL) p.damage((-p.vy - SAFE_FALL) * 0.6);
+      if (p.vy < -SAFE_FALL && !p.featherFall) p.damage((-p.vy - SAFE_FALL) * 0.6);
       p.y = ground;
       p.vy = keys.Space && !p.knitting && steepness(p.x, p.z) <= STEEP ? 8 : 0;
       p.grounded = p.vy === 0;

@@ -146,6 +146,10 @@ export function createWar(g) {
   }
   function chooseTarget(e) {
     if (e.def.boss || e.local) return playerTarget;
+    // A scarecrow in one of their own pelts is more than they can bear: whatever is within sight of it goes for it first.
+    let lure = null, lureD = Infinity;
+    for (const s of g.defences.structures) { const d = dist(e.x, e.z, s.x, s.z); if (!s.broken && s.def.lure && d < s.def.lure && d < lureD) { lure = s; lureD = d; } }
+    if (lure) return { type: 'structure', ref: lure };
     const toPlayer = dist(e.x, e.z, g.player.x, g.player.z);
     if (toPlayer < 22) return playerTarget;
     let best = null, bestD = 120; // nothing goes looking for your works from further off than this

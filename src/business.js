@@ -29,16 +29,20 @@ export const GEAR = [
   { id: 'sling', vendor: 'smith', name: 'A stronger sling', blurb: 'hits harder, loads faster', prices: [70, 320, 1200, 4000] },
   { id: 'coat', vendor: 'tailor', name: 'A thicker coat', blurb: 'you can take more of a beating', prices: [120, 500, 1800, 6000] },
   { id: 'boots', vendor: 'tailor', name: 'Seven-mile boots', blurb: 'you can carry twice the load', prices: [200, 900] },
+  { id: 'ride', vendor: 'wright', name: 'One-Wheeler Wubble', blurb: 'rolls you along the road, much faster', prices: [350, 1400] },
+  // Bought by the bottle and drunk with [H]: `carry` is how many you can have on you at once.
+  { id: 'juice', vendor: 'wright', name: 'Moose Juice', blurb: 'a bottle puts you back on your feet: [H]', prices: [40], carry: 3 },
 ];
 const VENDORS = [
   { id: 'smith', sign: ['AXES', '& SLINGS'], at: [16, -10] },
   { id: 'tailor', sign: ['COATS', '& BOOTS'], at: [-18, -14] },
+  { id: 'wright', sign: ['WHEELS', '& TONICS'], at: [22, 12] },
 ];
 
 export function createBusiness(g) {
   const { scene } = g, stock = g.stock;
   const owned = { cart: 0, knitter: 0, wagon: 0, factory: 0, hacker: 0 };
-  const gear = { axe: 0, sling: 0, coat: 0, boots: 0 };
+  const gear = { axe: 0, sling: 0, coat: 0, boots: 0, ride: 0, juice: 0 };
   const units = [];       // everything that can be attacked and wrecked
   const pickups = [];     // tufts lying on the ground
   const v = new THREE.Vector3();
@@ -393,19 +397,34 @@ export function createBusiness(g) {
   // What you carry and how hard you hit follow from what you have bought.
   function applyGear() {
     const p = g.player, load = (owned.cart ? 3 : 1) * (1 + gear.boots);
-    p.axe = 2 + gear.axe * 1.5;
-    // What you have made of the animals' spoils counts too (see crafting.js).
-    const made = g.crafting?.made || { suit: 0, shoes: 0, shot: 0, staff: 0 };
-    p.slingDamage = 1 + gear.sling + made.shot;
-    p.armour = 0.8 ** made.suit;   // the share of a blow that gets through
-    p.pace = 1 + made.shoes * 0.08;
-    p.mend = 1 + made.staff;
+    const made = g.crafting?.made || {}; // what you have made of the animals' spoils counts too (see crafting.js)
+    p.axe = 2 + gear.axe * 1.5 + (made.claws || 0) * 1.5;
+    p.ride = 1 + gear.ride * 0.5;   // how much faster you go on the road
+    p.featherFall = made.cloak > 0;
+    p.slingDamage = 1 + gear.sling + (made.shot || 0);
+    p.armour = 0.8 ** (made.suit || 0);   // the share of a blow that gets through
+    p.pace = 1 + (made.shoes || 0) * 0.08;
+    p.mend = 1 + (made.staff || 0);
     p.slingRest = 0.85 - gear.sling * 0.1;
     const grown = 10 + gear.coat * 6 - p.maxHealth;
     p.maxHealth += grown; p.health += Math.max(0, grown);
     p.maxTufts = 4 * load; p.maxThneeds = 8 * load;
   }
-  const gearPrice = (id) => GEAR.find((item) => item.id === id).prices[gear[id]] ?? Infinity;
+  function gearPrice(id) {
+    const item = GEAR.find((x) => x.id === id);
+    if (item.carry) return gear[id] < item.carry ? item.prices[0] : Infinity;
+    return item.prices[gear[id]] ?? Infinity;
+  }
+  // A bottle of Moose Juice, if you have one and need one.
+  function drink() {
+    const p = g.player;
+    if (!gear.juice || p.health <= 0 || p.health > p.maxHealth - 0.5) return false;
+    gear.juice--;
+    p.health = Math.min(p.maxHealth, p.health + Math.max(8, p.maxHealth * 0.6));
+    g.audio.pickup();
+    g.ui.tip(gear.juice ? `Moose Juice. ${gear.juice} left.` : 'Moose Juice. That was the last bottle.', 4);
+    return true;
+  }
   function buyGear(id, free = false) {
     const cost = gearPrice(id);
     if (cost === Infinity || (!free && stock.money < cost)) return false;
@@ -504,7 +523,7 @@ export function createBusiness(g) {
   }
 
   return {
-    update, use, hint, buy, price, owned, units, damage, scare, onTreeDown, pickups, people, gear, buyGear, applyGear, vendorNearby, hackers,
+    update, use, hint, buy, price, owned, units, damage, scare, onTreeDown, pickups, people, gear, buyGear, applyGear, drink, vendorNearby, hackers,
     gearItems: () => { const v = vendorNearby(); return GEAR.filter((item) => v && item.vendor === v.id).map((item) => ({ ...item, price: gearPrice(item.id), owned: gear[item.id] })); },
     items: () => ITEMS.map((item) => ({ ...item, name: item.id === 'factory' && owned.factory ? 'Bigger the factory' : item.name, price: price(item.id), owned: owned[item.id] })),
     smog: () => owned.factory / 4,

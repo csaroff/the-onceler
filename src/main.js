@@ -82,7 +82,7 @@ g.knockout = () => { knockedOut = true; fatal = g.war.duel; };
 function comeRound() {
   knockedOut = false;
   if (fatal) return die();
-  const lost = Math.round(g.stock.money * 25) / 100;
+  const lost = g.crafting.made.charm ? 0 : Math.round(g.stock.money * 25) / 100; // a pearl charm keeps your money on you
   g.stock.money = Math.round((g.stock.money - lost) * 100) / 100;
   g.ui.fade(true);
   setTimeout(() => g.ui.fade(false), 1500);
@@ -181,15 +181,14 @@ function menuHtml() {
   }
   if (menu === 'defences') {
     return '<h3>Defences</h3>' + DEFENCES.map((d, i) => {
-      const cls = g.defences.placing === d ? 'sel' : g.stock.money < d.price ? 'off' : '';
-      return `<div class="${cls}">[${i + 1}] ${d.name} · $${d.price} · ${d.blurb}</div>`;
+      const cls = g.defences.placing === d ? 'sel' : g.defences.affordable(d) ? '' : 'off';
+      return `<div class="${cls}">[${i + 1}] ${d.name} · ${g.defences.priceText(d)} · ${d.blurb}</div>`;
     }).join('') + `<div>${g.defences.placing ? 'click to build · ' : ''}[V] close</div>`;
   }
   if (menu === 'craft') {
     const home = g.crafting.atShop();
     return '<h3>Make</h3>' + g.crafting.recipes().map((r, i) => {
-      const [spoil, count] = Object.entries(r.cost)[0];
-      const price = r.full ? 'no better to be made' : `${count} ${spoil === 'deadwood' ? 'deadwood' : spoil + 's'} (you have ${r.have})`;
+      const price = r.full ? (r.most > 1 ? 'no better to be made' : 'made') : g.crafting.billText(r.cost);
       return `<div class="${r.can && home ? '' : 'off'}">[${i + 1}] ${r.name} · ${price} · ${r.blurb}${r.made ? ` (${r.made})` : ''}</div>`;
     }).join('') + `<div>${home ? '' : 'made at your shop, not out here · '}[C] close</div>`;
   }
@@ -198,7 +197,7 @@ function menuHtml() {
     if (!items.length) { menu = null; return ''; } // walked away from the stall
     return '<h3>For sale</h3>' + items.map((item, i) => {
       const soldOut = item.price === Infinity, cls = soldOut || g.stock.money < item.price ? 'off' : '';
-      return `<div class="${cls}">[${i + 1}] ${item.name} · ${soldOut ? 'no better to be had' : `$${item.price}`} · ${item.blurb}${item.owned ? ` (${item.owned})` : ''}</div>`;
+      return `<div class="${cls}">[${i + 1}] ${item.name} · ${soldOut ? (item.carry ? 'you can carry no more' : 'no better to be had') : `$${item.price}`} · ${item.blurb}${item.owned ? ` (${item.owned})` : ''}</div>`;
     }).join('') + '<div>[Q] close</div>';
   }
   return '';
@@ -234,8 +233,9 @@ function updateScreen() {
   ui.money(stock.money);
   ui.goal(goal());
   const carrying = [player.tufts && `${player.tufts} tufts`, player.thneeds && `${player.thneeds} Thneeds`].filter(Boolean).join(', ');
+  const juice = g.business.gear.juice ? `Moose Juice: ${g.business.gear.juice} · [H] to drink<br>` : '';
   const spoils = g.crafting.carrying();
-  ui.status(`${carrying ? `Carrying ${carrying}<br>` : ''}${spoils ? `Spoils: ${spoils}<br>` : ''}At the shop: ${stock.tufts} tufts, ${stock.thneeds} Thneeds<br>${g.story.felled.toLocaleString()} trees felled`);
+  ui.status(`${carrying ? `Carrying ${carrying}<br>` : ''}${juice}${spoils ? `Spoils: ${spoils}<br>` : ''}At the shop: ${stock.tufts} tufts, ${stock.thneeds} Thneeds<br>${g.story.felled.toLocaleString()} trees felled`);
   ui.hint(g.scenes.active ? '' : g.defences.hint() || g.business.hint());
   ui.menu(g.scenes.active ? '' : menuHtml());
   ui.health(player.health / player.maxHealth);
@@ -265,6 +265,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyV') { menu = menu === 'defences' ? null : 'defences'; g.defences.select(null); }
   if (e.code === 'KeyQ' || e.code === 'Escape') { menu = null; g.defences.select(null); }
   if (e.code === 'KeyF') g.player.fireSling();
+  if (e.code === 'KeyH') g.business.drink();
   const digit = /^Digit([1-9])$/.exec(e.code);
   if (digit && menu === 'business') { const item = g.business.items()[digit[1] - 1]; if (item) g.business.buy(item.id); }
   if (digit && menu === 'craft') { const r = g.crafting.recipes()[digit[1] - 1]; if (r) g.crafting.make(r.id); }
