@@ -40,6 +40,17 @@ const left = await run('return t.until(() => !g.war.enemies.includes(loot), 90)'
 assert.ok(left, 'in the end it gives up and goes');
 assert.equal((await read()).health, 10, 'without ever having reached you');
 
+// ---- The same goes for a whole army, champion included. You refuse the champion and hold the top of the cliff; the
+// line charges and ends up at the foot of it. A raid that cannot reach you must end, not hang over you for ever.
+await run(`g.war.bearing = Math.atan2(cliff.foot.x - g.player.x, cliff.foot.z - g.player.z); g.war.muster(); g.war.charge(); g.war.routed();
+  for (const e of g.war.enemies) { e.x = cliff.foot.x + (Math.random() - 0.5) * 6; e.z = cliff.foot.z + (Math.random() - 0.5) * 6; e.best = Infinity; }`);
+const stranded = await run('return { all: g.war.alive(), champion: !!g.war.champion, flyers: g.war.enemies.filter((e) => e.def.flies).length }');
+assert.ok(stranded.all >= 9 && stranded.champion && stranded.flyers === 0, `an army and its champion, all on foot, at the bottom (${stranded.all})`);
+const over = await run("return t.until(() => g.war.phase === 'calm', 240)");
+assert.ok(over, `the raid ends when none of them can get to you (still ${await run('return g.war.enemies.filter((e) => e.hp > 0).map((e) => e.kind).join(", ")')} after four minutes)`);
+assert.equal((await read()).health, 10, 'and nobody touched you');
+assert.equal((await read()).raid, 1, 'holding ground they cannot take counts as seeing them off');
+
 // ---- Backing away is slow: four seconds backwards covers about half what four seconds forwards does.
 await run('t.stand(0, 60, 0, 0)');
 await run("t.hold('KeyW', 4)");

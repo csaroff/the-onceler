@@ -57,7 +57,9 @@ const report = await page.evaluate(([limit, duels]) => {
     }
     if (g.time >= nextSample) {
       income.push(g.stock.sold - lastSold); lastSold = g.stock.sold; nextSample += 300;
-      warLog.push(`${Math.round(g.time / 60)} min: ${w.phase}, raid ${w.raid + 1}, ${w.alive()} attacking (${w.locals()} local), ${w.standing()} in line, ${w.reserves} in reserve, threat ${w.threat.toFixed(0)}, health ${p.health.toFixed(0)}/${p.maxHealth}, ruin ${g.ruin.toFixed(2)}`);
+      warLog.push(`${Math.round(g.time / 60)} min: ${w.phase}, raid ${w.raid + 1}, ${w.alive()} attacking (${w.locals()} local), ${w.standing()} in line, ${w.reserves} in reserve, threat ${w.threat.toFixed(0)}, health ${p.health.toFixed(0)}/${p.maxHealth}, ruin ${g.ruin.toFixed(2)}, bot at ${p.x.toFixed(0)},${p.z.toFixed(0)}`
+        // What the nearest few attackers are up to.
+        + foes().sort((a, b) => away(a) - away(b)).slice(0, 3).map((e) => ` | ${e.kind} ${e.state} ${away(e).toFixed(0)} m off at ${e.x.toFixed(0)},${e.z.toFixed(0)} y ${e.y.toFixed(0)}, hp ${e.hp.toFixed(0)}, stall ${e.stall.toFixed(0)} -> ${e.target?.type}${e.target?.ref ? ':' + (e.target.ref.kind || e.target.ref.def?.id) : ''}`).join(''));
     }
     const o = g.business.owned;
     if (g.stock.sold > 0) mark('first sale');
