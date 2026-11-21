@@ -18,7 +18,7 @@ const report = await page.evaluate((limit) => {
   const near = (list) => list.reduce((a, b) => (Math.hypot(a.x - p.x, a.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? a : b));
   const foes = () => g.war.enemies.filter((e) => e.hp > 0 && e.state !== 'wait');
   let knockouts = 0, lastHealth = p.health, wreckedSeconds = 0;
-  const knockoutAt = [], income = [], hurtBy = {}, waveSizes = [];
+  const knockoutAt = [], income = [], hurtBy = {}, waveSizes = [], warLog = [];
   const realDamage = p.damage;
   p.damage = (amount) => {
     const close = foes().filter((e) => Math.hypot(e.x - p.x, e.z - p.z) < 25);
@@ -48,7 +48,13 @@ const report = await page.evaluate((limit) => {
     if (g.war.wave !== lastWave) { lastWave = g.war.wave; waveSizes.push(`${g.war.wave}:${foes().length}`); }
     wreckedSeconds += g.business.units.filter((u) => u.broken).length * 0.05;
     // Thneeds sold in each five minutes.
-    if (g.time >= nextSample) { income.push(g.stock.sold - lastSold); lastSold = g.stock.sold; nextSample += 300; }
+    if (g.time >= nextSample) {
+      income.push(g.stock.sold - lastSold); lastSold = g.stock.sold; nextSample += 300;
+      // What the war is doing, and what the nearest few attackers are up to.
+      const w = g.war, live = w.enemies.filter((e) => e.hp > 0);
+      warLog.push(`${Math.round(g.time / 60)} min: ${w.phase}, wave ${w.wave}, stage ${w.stage}, ${w.alive()} attacking, duel ${w.duel}, lieutenant ${w.challenge ? `${w.challenge.state} hp ${Math.round(w.challenge.hp)}` : 'none'}, threat ${w.threat.toFixed(0)}, calm ${w.calm.toFixed(0)}, bot ${trace[trace.length - 1]?.[1]} at ${p.x.toFixed(0)},${p.z.toFixed(0)}`
+        + live.filter((e) => e.state !== 'wait').slice(0, 3).map((e) => ` | ${e.kind} ${e.state} at ${e.x.toFixed(0)},${e.z.toFixed(0)} -> ${e.target?.type}${e.target?.ref ? ':' + (e.target.ref.kind || e.target.ref.def?.id) : ''}`).join(''));
+    }
     lastHealth = p.health;
     const o = g.business.owned;
     if (g.stock.sold > 0) mark('first sale');
@@ -157,7 +163,7 @@ const report = await page.evaluate((limit) => {
     }
   }
   const o = g.business.owned;
-  return { trace, marks, knockouts, knockoutAt, income, hurtBy, waveSizes, wreckedMinutes: +(wreckedSeconds / 60).toFixed(1), shopTufts: g.stock.tufts, shopThneeds: g.stock.thneeds, broken: g.business.units.filter((u) => u.broken).map((u) => u.kind), minutes: +(g.time / 60).toFixed(1), money: g.stock.money, sold: g.stock.sold, felled: g.story.felled, owned: o, wave: g.war.wave, stage: g.war.stage, guns: g.defences.structures.length };
+  return { trace, marks, knockouts, knockoutAt, income, hurtBy, waveSizes, warLog, wreckedMinutes: +(wreckedSeconds / 60).toFixed(1), shopTufts: g.stock.tufts, shopThneeds: g.stock.thneeds, broken: g.business.units.filter((u) => u.broken).map((u) => u.kind), minutes: +(g.time / 60).toFixed(1), money: g.stock.money, sold: g.stock.sold, felled: g.story.felled, owned: o, wave: g.war.wave, stage: g.war.stage, guns: g.defences.structures.length };
 }, minutes);
 await browser.close();
 
@@ -171,3 +177,4 @@ console.log(`Thneeds sold per five minutes: ${report.income.join(', ')}`);
 console.log(`knocked out at minutes: ${report.knockoutAt.join(', ')}`);
 console.log(`damage taken, by the nearest enemy at the time: ${JSON.stringify(report.hurtBy)}`);
 console.log(`wave sizes (wave:count): ${report.waveSizes.join(' ')}`);
+if (process.argv.includes('--war')) console.log(report.warLog.join('\n'));
