@@ -394,7 +394,12 @@ export function createBusiness(g) {
   function applyGear() {
     const p = g.player, load = (owned.cart ? 3 : 1) * (1 + gear.boots);
     p.axe = 2 + gear.axe * 1.5;
-    p.slingDamage = 1 + gear.sling;
+    // What you have made of the animals' spoils counts too (see crafting.js).
+    const made = g.crafting?.made || { suit: 0, shoes: 0, shot: 0, staff: 0 };
+    p.slingDamage = 1 + gear.sling + made.shot;
+    p.armour = 0.8 ** made.suit;   // the share of a blow that gets through
+    p.pace = 1 + made.shoes * 0.08;
+    p.mend = 1 + made.staff;
     p.slingRest = 0.85 - gear.sling * 0.1;
     const grown = 10 + gear.coat * 6 - p.maxHealth;
     p.maxHealth += grown; p.health += Math.max(0, grown);
@@ -499,7 +504,7 @@ export function createBusiness(g) {
   }
 
   return {
-    update, use, hint, buy, price, owned, units, damage, scare, onTreeDown, pickups, people, gear, buyGear, vendorNearby, hackers,
+    update, use, hint, buy, price, owned, units, damage, scare, onTreeDown, pickups, people, gear, buyGear, applyGear, vendorNearby, hackers,
     gearItems: () => { const v = vendorNearby(); return GEAR.filter((item) => v && item.vendor === v.id).map((item) => ({ ...item, price: gearPrice(item.id), owned: gear[item.id] })); },
     items: () => ITEMS.map((item) => ({ ...item, name: item.id === 'factory' && owned.factory ? 'Bigger the factory' : item.name, price: price(item.id), owned: owned[item.id] })),
     smog: () => owned.factory / 4,

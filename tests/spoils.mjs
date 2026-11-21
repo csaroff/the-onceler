@@ -43,7 +43,7 @@ const suit = (await run('return g.crafting.recipes()')).find((r) => r.id === 'su
 assert.equal(suit.name, 'Bar-ba-loot suit');
 assert.deepEqual(suit.cost, { pelt: 6 });
 assert.equal(await run('return g.crafting.make("suit")'), false, 'not out here');
-await run('t.stand(4, 9, 0, 0); t.press("KeyC")');
+await run('t.stand(4, 9, 0, 0); t.press("KeyC"); t.run(0.1)');
 assert.match(await run('return document.getElementById("menu").textContent'), /Bar-ba-loot suit/, '[C] shows what can be made');
 assert.equal(await run('return g.crafting.make("suit")'), true, 'made at the shop');
 s = await run('return { have: { ...g.crafting.spoils }, made: { ...g.crafting.made } }');

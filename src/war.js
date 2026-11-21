@@ -165,6 +165,7 @@ export function createWar(g) {
     if (e.hp <= 0) {
       e.state = 'dead'; e.timer = 0;
       g.audio.squeal();
+      g.crafting.drop(e);
       if (e.def.boss) bossBeaten(e);
     } else if (!e.def.boss && e.state !== 'rage') { e.state = 'hurt'; e.timer = 0; }
   }
@@ -587,6 +588,7 @@ export function createWar(g) {
   war.snapshot = () => ({ raid: war.raid, enabled: war.enabled, won: war.won, threat: war.threat });
   war.restore = (d) => Object.assign(war, { raid: d.raid || 0, enabled: d.enabled, won: !!d.won, threat: d.threat || 0, phase: 'calm', calm: 45 });
   war.spawn = spawn;
+  war.hurt = hurt;
   war.muster = muster;
   war.raiseDead = raiseDead;
   return war;

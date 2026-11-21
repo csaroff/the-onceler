@@ -13,6 +13,7 @@ export function createPlayer(g) {
   const p = {
     x: 5, z: 11, y: 0, vy: 0, yaw: 0.42, pitch: 0, // standing on the road, looking at the shop
     health: 10, maxHealth: 10, lastHurt: -99, hurt: 0,
+    armour: 1, pace: 1, mend: 1, // changed by what you make of the animals' spoils
     axe: 2, slingDamage: 1, slingRest: 0.85, // what a blow and a slung rock do; better ones are sold in town
     tufts: 0, thneeds: 0, maxTufts: 4, maxThneeds: 8,
     swing: 0, struck: true, sling: 0, shot: true, slingCooldown: 0,
@@ -56,7 +57,7 @@ export function createPlayer(g) {
 
   p.damage = (amount) => {
     if (g.scenes.active || p.health <= 0) return;
-    p.health -= amount;
+    p.health -= amount * p.armour;
     p.lastHurt = g.time;
     p.hurt = 0.4;
     g.ui.flash();
@@ -85,7 +86,7 @@ export function createPlayer(g) {
       const loaded = p.tufts >= p.maxTufts || p.thneeds >= p.maxThneeds, wading = height(p.x, p.z) < LAKE_Y - 0.3;
       // Walking backwards is slow and cannot be hurried: you cannot outrun what is chasing you while facing it.
       const pace = forward < 0 ? WALK * BACKWARDS : keys.ShiftLeft || keys.ShiftRight ? RUN : WALK;
-      const speed = pace * (loaded ? 0.85 : 1) * (wading ? 0.5 : 1), dir = p.facing();
+      const speed = pace * p.pace * (loaded ? 0.85 : 1) * (wading ? 0.5 : 1), dir = p.facing();
       const mx = ((dir.x * forward - dir.z * strafe) / len) * speed * dt, mz = ((dir.z * forward + dir.x * strafe) / len) * speed * dt;
       // Blocked straight ahead: slide along whichever way is open.
       if (open(p.x + mx, p.z + mz)) { p.x += mx; p.z += mz; }
@@ -121,7 +122,7 @@ export function createPlayer(g) {
     }
     p.hurt = Math.max(0, p.hurt - dt);
     p.offering = Math.max(0, p.offering - dt);
-    if (g.time - p.lastHurt > 8) p.health = Math.min(p.maxHealth, p.health + dt * 0.5);
+    if (g.time - p.lastHurt > 8) p.health = Math.min(p.maxHealth, p.health + dt * 0.5 * p.mend);
 
     g.camera.position.set(p.x, p.y + EYE, p.z);
     g.camera.rotation.set(p.pitch, p.yaw, 0);

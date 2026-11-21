@@ -13,6 +13,7 @@ import { createWar } from './war.js';
 import { createLorax } from './lorax.js';
 import { createDefences, DEFENCES } from './defences.js';
 import { createScenes } from './scenes.js';
+import { createCrafting } from './crafting.js';
 import { height, clamp, smooth, dist, SHOP, TOWN, THRONE, FACTORY } from './terrain.js';
 import * as land from './terrain.js';
 
@@ -55,6 +56,7 @@ g.war = createWar(g);
 g.lorax = createLorax(g);
 g.defences = createDefences(g);
 g.scenes = createScenes(g);
+g.crafting = createCrafting(g);
 g.world.settle(g.player.x, g.player.z); // all the land round the shop, before the first picture
 g.wildlife.populate();
 
@@ -104,7 +106,7 @@ g.snapshot = () => ({
   stock: { ...g.stock }, seen: [...g.story.seen], felled: g.story.felled, ruin: g.ruin, ended: g.ended,
   felledTrees: g.world.felled(),
   player: { x: g.player.x, z: g.player.z, yaw: g.player.yaw, tufts: g.player.tufts, thneeds: g.player.thneeds },
-  owned: { ...g.business.owned }, gear: { ...g.business.gear }, defences: g.defences.snapshot(), war: g.war.snapshot(), emptied: g.wildlife.emptied,
+  owned: { ...g.business.owned }, gear: { ...g.business.gear }, defences: g.defences.snapshot(), crafting: g.crafting.snapshot(), war: g.war.snapshot(), emptied: g.wildlife.emptied,
 });
 
 // Apply a snapshot to a freshly started game.
@@ -118,6 +120,7 @@ g.restore = (d) => {
   g.ended = d.ended;
   for (const [id, count] of Object.entries(d.owned)) for (let i = 0; i < count; i++) g.business.buy(id, true);
   for (const [id, count] of Object.entries(d.gear || {})) for (let i = 0; i < count; i++) g.business.buyGear(id, true);
+  g.crafting.restore(d.crafting);
   g.defences.restore(d.defences);
   g.wildlife.restore(d.emptied);
   g.war.restore(d.war);
@@ -167,7 +170,7 @@ function goal() {
   return 'Bigger the business';
 }
 
-let menu = null; // 'business', 'defences', 'vendor' or nothing
+let menu = null; // 'business', 'defences', 'vendor', 'craft' or nothing
 g.openMenu = (name) => { menu = name; g.defences.select(null); };
 function menuHtml() {
   if (menu === 'business') {
@@ -181,6 +184,14 @@ function menuHtml() {
       const cls = g.defences.placing === d ? 'sel' : g.stock.money < d.price ? 'off' : '';
       return `<div class="${cls}">[${i + 1}] ${d.name} · $${d.price} · ${d.blurb}</div>`;
     }).join('') + `<div>${g.defences.placing ? 'click to build · ' : ''}[V] close</div>`;
+  }
+  if (menu === 'craft') {
+    const home = g.crafting.atShop();
+    return '<h3>Make</h3>' + g.crafting.recipes().map((r, i) => {
+      const [spoil, count] = Object.entries(r.cost)[0];
+      const price = r.full ? 'no better to be made' : `${count} ${spoil === 'deadwood' ? 'deadwood' : spoil + 's'} (you have ${r.have})`;
+      return `<div class="${r.can && home ? '' : 'off'}">[${i + 1}] ${r.name} · ${price} · ${r.blurb}${r.made ? ` (${r.made})` : ''}</div>`;
+    }).join('') + `<div>${home ? '' : 'made at your shop, not out here · '}[C] close</div>`;
   }
   if (menu === 'vendor') {
     const items = g.business.gearItems();
@@ -223,7 +234,8 @@ function updateScreen() {
   ui.money(stock.money);
   ui.goal(goal());
   const carrying = [player.tufts && `${player.tufts} tufts`, player.thneeds && `${player.thneeds} Thneeds`].filter(Boolean).join(', ');
-  ui.status(`${carrying ? `Carrying ${carrying}<br>` : ''}At the shop: ${stock.tufts} tufts, ${stock.thneeds} Thneeds<br>${g.story.felled.toLocaleString()} trees felled`);
+  const spoils = g.crafting.carrying();
+  ui.status(`${carrying ? `Carrying ${carrying}<br>` : ''}${spoils ? `Spoils: ${spoils}<br>` : ''}At the shop: ${stock.tufts} tufts, ${stock.thneeds} Thneeds<br>${g.story.felled.toLocaleString()} trees felled`);
   ui.hint(g.scenes.active ? '' : g.defences.hint() || g.business.hint());
   ui.menu(g.scenes.active ? '' : menuHtml());
   ui.health(player.health / player.maxHealth);
@@ -249,11 +261,13 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyN' && !g.started && hasSave) { localStorage.removeItem(SAVE_KEY); hasSave = false; location.reload(); }
   if (!playing()) return;
   if (e.code === 'KeyB') { menu = menu === 'business' ? null : 'business'; g.defences.select(null); }
+  if (e.code === 'KeyC') { menu = menu === 'craft' ? null : 'craft'; g.defences.select(null); }
   if (e.code === 'KeyV') { menu = menu === 'defences' ? null : 'defences'; g.defences.select(null); }
   if (e.code === 'KeyQ' || e.code === 'Escape') { menu = null; g.defences.select(null); }
   if (e.code === 'KeyF') g.player.fireSling();
   const digit = /^Digit([1-9])$/.exec(e.code);
   if (digit && menu === 'business') { const item = g.business.items()[digit[1] - 1]; if (item) g.business.buy(item.id); }
+  if (digit && menu === 'craft') { const r = g.crafting.recipes()[digit[1] - 1]; if (r) g.crafting.make(r.id); }
   if (digit && menu === 'vendor') { const item = g.business.gearItems()[digit[1] - 1]; if (item) g.business.buyGear(item.id); }
   if (digit && menu === 'defences') { const d = DEFENCES[digit[1] - 1]; if (d) g.defences.select(d.id); }
 });
@@ -329,6 +343,7 @@ g.step = (dt) => {
   pressed.clear();
 
   g.business.update(dt);
+  g.crafting.update(dt);
   g.wildlife.update(dt);
   g.war.update(dt);
   g.lorax.update(dt);
