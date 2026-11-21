@@ -23,7 +23,7 @@ const report = await page.evaluate(([limit, duels]) => {
   const pressed = () => foes().some((e) => away(e) < 30);
 
   const knockoutAt = [], income = [], hurtBy = {}, armies = [], warLog = [], duelLog = [];
-  let drunk = 0, wreckedSeconds = 0, lastSold = 0, nextSample = 300, lastPhase = 'calm', trips = 0;
+  let dodging = false, drunk = 0, wreckedSeconds = 0, lastSold = 0, nextSample = 300, lastPhase = 'calm', trips = 0;
   const realDamage = p.damage, realKnockout = g.knockout;
   p.damage = (amount) => {
     const close = foes().filter((e) => away(e) < 25), kind = close.length ? near(close).kind : 'shot from afar';
@@ -48,6 +48,26 @@ const report = await page.evaluate(([limit, duels]) => {
       g.keys.KeyD = d < 30 && Math.floor(g.time * 0.8) % 2 === 0;
       g.keys.KeyA = d < 30 && !g.keys.KeyD;
     } else { g.keys.KeyD = false; g.keys.KeyA = false; g.keys.KeyS = false; }
+    // The three things a player learns to do about a champion's own move.
+    // (Whoever called tick() sets the walking keys again on its next step, so a dodge only has to let go of them once.)
+    g.keys.Space = false;
+    if (dodging) { g.keys.KeyW = false; g.keys.ShiftLeft = false; }
+    dodging = false;
+    const ring = g.war.rings[0], landing = g.war.marks[0], diver = f.find((e) => ['scream', 'strike', 'swoop'].includes(e.state));
+    if (ring) {
+      // Jump as the shock gets to you.
+      const gap = Math.hypot(p.x - ring.x, p.z - ring.z) - ring.r;
+      g.keys.Space = gap > -1 && gap < 3.5;
+    }
+    if (landing && Math.hypot(p.x - landing.x, p.z - landing.z) < 7) {
+      // Turn your back on the mark and run.
+      p.yaw = Math.atan2(landing.x - p.x, landing.z - p.z) + (Math.hypot(p.x - landing.x, p.z - landing.z) < 0.5 ? 1 : 0);
+      g.keys.KeyW = true; g.keys.ShiftLeft = true; g.keys.KeyS = g.keys.KeyA = g.keys.KeyD = false; dodging = true;
+    } else if (diver) {
+      // Run across it, and keep running.
+      p.yaw = Math.atan2(p.x - diver.x, p.z - diver.z) + Math.PI / 2;
+      g.keys.KeyW = true; g.keys.ShiftLeft = true; g.keys.KeyS = g.keys.KeyA = g.keys.KeyD = false; dodging = true;
+    }
     if (p.health < p.maxHealth * 0.35 && g.business.drink()) drunk++;
     g.step(0.05);
     wreckedSeconds += g.business.units.filter((u) => u.broken).length * 0.05;
@@ -107,7 +127,7 @@ const report = await page.evaluate(([limit, duels]) => {
   }
 
   // What to buy, in order. The bot saves for the next thing on the list. Guns go up beside the shop; gear means a trip to town.
-  const ORDER = ['cart', 'knitter', 'gear:axe', 'gear:ride', 'wagon', 'jigger', 'jigger', 'factory', 'gear:coat', 'hacker', 'knitter', 'gear:sling', 'knitter', 'wagon',
+  const ORDER = ['cart', 'knitter', 'gear:axe', 'wagon', 'jigger', 'jigger', 'factory', 'gear:ride', 'gear:coat', 'hacker', 'knitter', 'gear:sling', 'knitter', 'wagon',
     'factory', 'kickapoo', 'gear:axe', 'kickapoo', 'factory', 'gear:coat', 'wagon', 'hacker', 'sputter', 'factory', 'sputter', 'gear:axe', 'wagon',
     'boomblitz', 'gear:coat', 'hacker', 'boomblitz', 'gear:sling', 'gear:axe', 'gear:coat'];
   let bought = 0;
@@ -186,12 +206,14 @@ const report = await page.evaluate(([limit, duels]) => {
       doing('duel');
       const c = w.champion, was = { hp: c.maxHp, health: p.health, at: minute(), name: c.def.boss };
       goTo(c.x, c.z, 12, 30, () => w.phase !== 'muster');
-      for (let i = 0; i < 6000 && w.champion && w.phase === 'duel' && !g.dead; i++) {
-        g.keys.KeyW = !g.keys.KeyS && away(w.champion) > 4.5 + w.champion.def.size;
+      let ticks = 0, mid = w.field.mid, furthest = 0, hpLeft = c.maxHp;
+      for (; ticks < 6000 && w.champion && w.phase === 'duel' && !g.dead; ticks++) {
+        furthest = Math.max(furthest, Math.hypot(p.x - mid.x, p.z - mid.z)); hpLeft = w.champion.hp;
         tick();
+        if (!dodging && w.champion) g.keys.KeyW = !g.keys.KeyS && away(w.champion) > 4.5 + w.champion.def.size; // it may have died in that tick
       }
       g.keys.KeyW = false;
-      duelLog.push(`raid ${w.raid + 1} at ${was.at} min, ${was.name} (${Math.round(was.hp)} hp) against axe ${p.axe}, health ${p.maxHealth}: ${g.dead ? 'KILLED' : w.champion ? 'broke off' : `won with ${p.health.toFixed(0)} health left`}`);
+      duelLog.push(`raid ${w.raid + 1} at ${was.at} min, ${was.name} (${Math.round(was.hp)} hp) against axe ${p.axe}, health ${p.maxHealth}: ${g.dead ? 'KILLED' : w.champion ? `broke off after ${(ticks / 20).toFixed(0)} s (phase ${w.phase}, champion at ${Math.round(hpLeft)} hp, bot got ${Math.round(furthest)} m from the field)` : `won with ${p.health.toFixed(0)} health left`}`);
     } else if (raided()) {
       // Refuse, and take it at the shop, among the guns.
       doing('defend');
