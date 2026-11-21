@@ -36,7 +36,7 @@ port 5199; do not start another. Use your own `--out` names (prefix them with yo
 Loop, at least eight times, and keep going while it is still improving:
 
 1. Render a contact sheet.
-2. **Open the PNG with the read tool and look at it.** Never judge from the code.
+2. **Open the PNG and look at it.** Never judge from the code.
 3. Write down, honestly, what a stranger would see. Compare it with the subject. Name the worst three problems.
 4. Fix them. Render again.
 

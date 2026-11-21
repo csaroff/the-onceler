@@ -2,6 +2,8 @@
 
 A first-person game set in the world of The Lorax. It starts beautiful. You have an axe, and Thneeds sell for $3.98.
 
+Play it at https://csaroff.github.io/the-onceler/, or run it yourself:
+
     npm install
     npm run dev        # then open the printed URL
 
