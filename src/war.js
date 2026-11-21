@@ -215,6 +215,8 @@ export function createWar(g) {
   function hurt(e, amount, fromX, fromZ) {
     if (e.hp <= 0) return;
     // Strike anything standing in the line and the truce is over. Strike the champion and you have answered it.
+    // During a duel the line only watches: a stone that goes wide into it does it no harm and changes nothing.
+    if (e.state === 'line' && war.duel) return;
     if (e.state === 'line') charge(true);
     else if (e.state === 'wait') beginDuel();
     else if (e.state === 'throne') beginFinale();
@@ -637,7 +639,8 @@ export function createWar(g) {
       if (dist(p.x, p.z, war.champion.x, war.champion.z) < 16) beginDuel();
       else if (war.truce <= 0 || dist(p.x, p.z, war.field.x, war.field.z) > 110) charge();
     } else if (war.phase === 'duel') {
-      if (dist(p.x, p.z, war.field.mid.x, war.field.mid.z) > 75) { charge(); g.ui.tip('You ran from it. They are all coming.', 6); }
+      // The fight may wander as far as the dodging takes it. Running away is leaving the champion behind.
+      if (war.champion && dist(p.x, p.z, war.champion.x, war.champion.z) > 80) { charge(); g.ui.tip('You ran from it. They are all coming.', 6); }
     } else if (war.phase === 'parley') {
       if (!g.scenes.active && !g.scenes.queue.length) charge();
     } else if (war.phase === 'fight') {
