@@ -40,7 +40,7 @@ const report = await page.evaluate(([limit, duels]) => {
       if (d < 30) {
         p.yaw = Math.atan2(p.x - e.x, p.z - e.z);
         p.pitch = Math.atan2(e.y + 1 - p.y - 1.7, d);
-        g.click(d < 4.5 + e.def.size ? 0 : 2);
+        g.click(d < 3 + e.def.size ? 0 : 2);
       }
       // A champion winding up a swing is the cue to back out of its reach.
       g.keys.KeyS = f.some((b) => b.def.boss && b.def.reach && b.state === 'attack' && !b.struck);
@@ -210,7 +210,7 @@ const report = await page.evaluate(([limit, duels]) => {
       for (; ticks < 6000 && w.champion && w.phase === 'duel' && !g.dead; ticks++) {
         furthest = Math.max(furthest, Math.hypot(p.x - mid.x, p.z - mid.z)); hpLeft = w.champion.hp;
         tick();
-        if (!dodging && w.champion) g.keys.KeyW = !g.keys.KeyS && away(w.champion) > 4.5 + w.champion.def.size; // it may have died in that tick
+        if (!dodging && w.champion) g.keys.KeyW = !g.keys.KeyS && away(w.champion) > 2.6 + w.champion.def.size; // it may have died in that tick
       }
       g.keys.KeyW = false;
       duelLog.push(`raid ${w.raid + 1} at ${was.at} min, ${was.name} (${Math.round(was.hp)} hp) against axe ${p.axe}, health ${p.maxHealth}: ${g.dead ? 'KILLED' : w.champion ? `broke off after ${(ticks / 20).toFixed(0)} s (phase ${w.phase}, champion at ${Math.round(hpLeft)} hp, bot got ${Math.round(furthest)} m from the field)` : `won with ${p.health.toFixed(0)} health left`}`);
