@@ -20,7 +20,7 @@ const KINDS = {
   smogulous: { art: horrors, opts: { kind: 'smogulous' }, hp: 8, speed: 4, dmg: 1, range: 9, cooldown: 1.6, size: 1.5, gait: 'walk', shot: null },
   lootBoss: { art: barbaloot, opts: { variant: 'lieutenant' }, hp: 36, speed: 4.4, dmg: 3, reach: 3.6, cooldown: 2.2, size: 1.5, gait: 'walk', swing: 1.2, boss: 'The Bar-ba-loot Lieutenant' },
   swanBoss: { art: swanArt, opts: { variant: 'lieutenant' }, hp: 40, speed: 12, dmg: 3, size: 2.4, flies: 12, gait: 'fly', boss: 'The Swomee-Swan Lieutenant' },
-  fishBoss: { art: fishArt, opts: { variant: 'lieutenant' }, hp: 60, speed: 2.6, dmg: 2.5, range: 20, cooldown: 2.4, size: 1.6, gait: 'walk', shot: 'glob', volley: 3, boss: 'The Humming-Fish Lieutenant' },
+  fishBoss: { art: fishArt, opts: { variant: 'lieutenant' }, hp: 48, speed: 2.6, dmg: 1.5, range: 20, cooldown: 3.2, size: 1.6, gait: 'walk', shot: 'glob', volley: 3, boss: 'The Humming-Fish Lieutenant' },
   biggerer: { art: horrors, opts: { kind: 'biggerer' }, hp: 140, speed: 3, dmg: 5, reach: 6, cooldown: 3, size: 3.2, gait: 'walk', swing: 1.4, boss: 'The Biggerer', brood: 'stumper' },
 };
 // What each stage of the war sends, and who leads it.
@@ -292,7 +292,8 @@ export function createWar(g) {
   // ---------------------------------------------------------------- waves
   function sendWave() {
     const stage = STAGES[war.stage], troops = stage.troops(war.wavesThisStage);
-    const count = Math.min(44, 3 + war.wavesThisStage * 2 + war.stage * 2 + Math.floor(war.wave / 3));
+    // Never more than one person can face, however long a stage drags on.
+    const count = Math.min(24, 3 + Math.min(war.wavesThisStage, 6) * 2 + war.stage * 2 + Math.floor(war.wave / 3));
     // They come from where he stood, toward the shop, or toward you if you are a long way from it.
     const farFromShop = dist(g.player.x, g.player.z, SHOP.x, SHOP.z) > 160;
     const goal = farFromShop ? g.player : SHOP, away = farFromShop ? 75 : 100;
@@ -351,6 +352,8 @@ export function createWar(g) {
     war.phase = 'calm';
     war.calm = 60;
     war.threat = 0;
+    // Won or lost, the third wave of a stage brings its lieutenant out. Otherwise losing would trap you in the stage.
+    if (war.wavesThisStage >= 3) issueChallenge();
   };
 
   // The last tree is down: there is nothing left to fight over. Everything still attacking is taken away.
