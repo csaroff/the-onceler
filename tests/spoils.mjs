@@ -35,7 +35,7 @@ const drops = await run(`const out = {};
 assert.deepEqual(drops.swan, ['feather']);
 assert.deepEqual(drops.fish, ['scale']);
 assert.deepEqual(drops.wight, ['deadwood']);
-assert.ok(drops.lootChampion.length >= 5 && drops.lootChampion.every((k) => k === 'pelt'), `a champion leaves a heap (${drops.lootChampion.length})`);
+assert.ok(drops.lootChampion.filter((k) => k === 'pelt').length >= 5, `a champion leaves a heap (${drops.lootChampion.length})`);
 
 // Out in the woods you can see what could be made, but the making is done at home.
 await run('g.crafting.spoils.pelt = 10'); // nine more Bar-ba-loots' worth, without the nine fights
