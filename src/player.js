@@ -13,7 +13,8 @@ export function createPlayer(g) {
   const p = {
     x: 5, z: 11, y: 0, vy: 0, yaw: 0.42, pitch: 0, // standing on the road, looking at the shop
     health: 10, maxHealth: 10, lastHurt: -99, hurt: 0,
-    armour: 1, pace: 1, mend: 1, ride: 1, featherFall: false, // changed by what you make of the animals' spoils
+    armour: 1, pace: 1, mend: 1, ride: 1, featherFall: false,
+    mount: null, // the Thneed Wagon you are riding, if you are // changed by what you make of the animals' spoils
     axe: 2, slingDamage: 1, slingRest: 0.85, // what a blow and a slung rock do; better ones are sold in town
     tufts: 0, thneeds: 0, maxTufts: 4, maxThneeds: 8,
     swing: 0, struck: true, sling: 0, shot: true, slingCooldown: 0,
@@ -79,7 +80,9 @@ export function createPlayer(g) {
     p.moving = 0;
     // Standing on a face too steep to stand on, you slide down it, and cannot jump your way up it.
     const steep = steepness(p.x, p.z) > STEEP, sliding = steep && p.y <= height(p.x, p.z) + 0.05;
-    if (sliding) {
+    if (p.mount) {
+      p.mount.carry(p); // riding: the wagon does the moving
+    } else if (sliding) {
       const gx = height(p.x + 1, p.z) - height(p.x - 1, p.z), gz = height(p.x, p.z + 1) - height(p.x, p.z - 1), gl = Math.hypot(gx, gz) || 1;
       p.x -= (gx / gl) * 9 * dt; p.z -= (gz / gl) * 9 * dt;
     } else if (len && !p.knitting) {
@@ -96,14 +99,14 @@ export function createPlayer(g) {
       p.moving = speed / RUN;
     }
 
-    const ground = height(p.x, p.z);
-    p.vy -= 25 * dt;
+    const ground = p.mount ? p.y : height(p.x, p.z);
+    p.vy = p.mount ? 0 : p.vy - 25 * dt;
     p.y += p.vy * dt;
     if (p.y <= ground) {
       // Coming down hard hurts: walk off a cliff and you may not get up.
       if (p.vy < -SAFE_FALL && !p.featherFall) p.damage((-p.vy - SAFE_FALL) * 0.6);
       p.y = ground;
-      p.vy = keys.Space && !p.knitting && steepness(p.x, p.z) <= STEEP ? 8 : 0;
+      p.vy = keys.Space && !p.knitting && !p.mount && steepness(p.x, p.z) <= STEEP ? 8 : 0;
       p.grounded = p.vy === 0;
     } else p.grounded = p.y - ground < 0.25 && p.vy <= 0;
 

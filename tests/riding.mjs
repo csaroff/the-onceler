@@ -56,11 +56,21 @@ const turned = await run('return [w.x, w.z]');
 await run('t.run(5)');
 assert.ok(await run(`return Math.hypot(w.x - ${turned[0]}, w.z - ${turned[1]}) > 40`), 'and turns straight round with nobody to wait for');
 
+// Ridden all the way home, it sets you down by the shop.
+await run('t.until(() => Math.hypot(w.x, w.z) < 200, 200); t.stand(w.x + 2, w.z + 2, w.x, w.z); g.pressed.add("KeyE"); t.run(0.1)');
+assert.equal(await run('return !!g.player.mount'), true, 'aboard on the way home');
+assert.ok(await run('return t.until(() => !g.player.mount, 30)'), 'set down at the end of the road');
+assert.ok(await run('return Math.hypot(g.player.x, g.player.z) < 30'), 'by the shop');
+
+// With nothing to sell it would stand there all day. Get on, and after a moment it takes you to town anyway.
+await run('g.stock.thneeds = 0; t.run(5); t.stand(w.x + 2, w.z + 2, w.x, w.z); g.pressed.add("KeyE"); t.run(8)');
+assert.equal(await run('return !!g.player.mount'), true, 'aboard an empty wagon');
+assert.ok(await run('return Math.hypot(g.player.x, g.player.z) > 50'), 'and it has set off');
+
 // A wagon wrecked under you throws you off.
-await run(`t.until(() => Math.hypot(w.x, w.z) < 30, 200); g.stock.thneeds = 20; t.stand(w.x + 2, w.z + 2, w.x, w.z); g.pressed.add("KeyE"); t.run(3);`);
-assert.equal(await run('return !!g.player.mount'), true);
 await run('g.business.damage(w, 999); t.run(0.2)');
 assert.equal(await run('return !!g.player.mount'), false, 'thrown off');
+assert.ok(Math.abs((await read()).y - (await run('return land.height(g.player.x, g.player.z)'))) < 0.5, 'on to the ground');
 
 await game.close();
 console.log('riding: ok');

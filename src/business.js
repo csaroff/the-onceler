@@ -4,12 +4,15 @@ import * as works from './art/works.js';
 import * as townArt from './art/town.js';
 import * as truffula from './art/truffula.js';
 import { height, dist, rand, roadPoint, roadDistance, SHOP, FACTORY, TOWN, ROAD_TO_TOWN } from './terrain.js';
-import { PALETTE } from './toon.js';
+import { PALETTE, toon } from './toon.js';
 
 export const PRICE = 3.98;
 const KNIT_SECONDS = 3.5, HAND_TUFTS = 4, HACKER_TUFTS = 8, HACKER_REST = 18;
 const WAGON_LOAD = 80, WAGON_SPEED = 16; // town is a long haul: a wagon is gone for more than two minutes
 const TOWN_DEMAND = 240;                 // how many Thneeds the town will take before it has had enough for now
+const SWEEP_RANGE = 40, SWEEP_SPEED = 9, BRUSH = 3; // a hacker sweeps up tufts this near it, at this pace, this wide
+const WAGON_WAIT = 60;     // seconds a wagon that brought you to town waits there for you
+const MOST_TUFTS = 400;    // tufts left lying about beyond this many blow away, oldest first
 const HACKER_SPACING = 30; // a smack reaches 13 m, so trees this far apart are in separate patches
 const FACTORY_PRICES = [250, 800, 2400, 6000];
 const FACTORY_RATE = [0, 0.5, 1.2, 3, 7];     // Thneeds a second, by factory level
@@ -38,6 +41,10 @@ const VENDORS = [
   { id: 'tailor', sign: ['COATS', '& BOOTS'], at: [-18, -14] },
   { id: 'wright', sign: ['WHEELS', '& TONICS'], at: [22, 12] },
 ];
+
+// A slice of a hacker's brush: a bristly drum, lying on its side.
+const brushGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.5, 9).rotateZ(Math.PI / 2);
+const brushPink = toon(PALETTE.thneedPink), brushPale = toon('#fff3b8');
 
 export function createBusiness(g) {
   const { scene } = g, stock = g.stock;
@@ -208,20 +215,23 @@ export function createBusiness(g) {
   }
 
   // --- tufts on the ground
-  function dropTufts(x, z, count, color) {
+  function dropTufts(x, z, count, color, owner = null) {
     for (let i = 0; i < count; i++) {
       const px = x + rand(-1.6, 1.6), pz = z + rand(-1.6, 1.6);
       const model = truffula.build({ kind: 'tuft', color });
       model.position.set(px, height(px, pz), pz);
       model.rotation.y = rand(0, 6.28);
       scene.add(model);
-      pickups.push({ x: px, z: pz, model });
+      pickups.push({ x: px, z: pz, model, color, owner });
     }
+    while (pickups.length > MOST_TUFTS) scene.remove(pickups.shift().model);
   }
   function onTreeDown(tree, x, z) {
     g.audio.crash();
     g.fx.burst(x, height(x, z) + 0.5, z, '#d8c9a0', 10, 5, 0.5);
-    if (tree.byMachine) stock.tufts += HACKER_TUFTS;
+    // A machine shakes more out of a tree than you do, but its tufts lie where they fall just the same, until the
+    // hacker that felled them comes round with its brush.
+    if (tree.byMachine) dropTufts(x, z, HACKER_TUFTS, tree.color, typeof tree.byMachine === 'object' ? tree.byMachine : null);
     else dropTufts(x, z, HAND_TUFTS, tree.color);
     g.onTreeFelled(tree);
   }
@@ -254,7 +264,7 @@ export function createBusiness(g) {
     }
     if (id === 'wagon') {
       const model = place(works.build({ kind: 'wagon' }), SHOP.x + 8, SHOP.z + 14);
-      wagons.push({ model, state: 'wait', s: 0, lane: 1.2 + wagons.length * 0.5, load: 0, waited: 0, smoke: 0, unit: unit('wagon', 'Thneed Wagon', model, 2.2, 10, 120) });
+      wagons.push({ model, state: 'wait', s: 0, lane: 1.2 + wagons.length * 0.5, load: 0, waited: 0, boarded: 0, park: 0, smoke: 0, unit: unit('wagon', 'Thneed Wagon', model, 2.2, 10, 120) });
       g.story.flag('wagon', 'wagon');
     }
     if (id === 'factory') {
@@ -273,7 +283,12 @@ export function createBusiness(g) {
     }
     if (id === 'hacker') {
       const model = place(works.build({ kind: 'hacker' }), SHOP.x - 12 - hackers.length * 5, SHOP.z - 12);
-      hackers.push({ model, x: model.position.x, z: model.position.z, state: 'seek', target: null, timer: 0, rest: 0, smoke: 0, unit: unit('hacker', 'Super-Axe-Hacker', model, 2.5, 14, 350) });
+      // The brush: a striped roller out in front, that spins when it sweeps.
+      const brush = new THREE.Group();
+      for (let i = 0; i < 6; i++) { const slice = new THREE.Mesh(brushGeo, i % 2 ? brushPink : brushPale); slice.position.x = -1.25 + i * 0.5; brush.add(slice); }
+      brush.position.set(0, 0.55, 3.1);
+      model.add(brush);
+      hackers.push({ model, brush, sweeping: false, swept: 0, x: model.position.x, z: model.position.z, state: 'seek', target: null, timer: 0, rest: 0, smoke: 0, unit: unit('hacker', 'Super-Axe-Hacker', model, 2.5, 14, 350) });
       g.story.flag('hacker', 'hacker');
     }
     return true;
@@ -287,6 +302,30 @@ export function createBusiness(g) {
       model.localToWorld(v.copy(chimney));
       g.fx.puff(v.x, v.y, v.z, { size, life: 4 + size, vy: 2 + size * 0.6, vx: 0.8, grow: 3.5 });
     }
+  }
+
+  // Move a hacker a step towards a spot, facing the way it goes.
+  function drive(h, x, z, step) {
+    const dx = x - h.x, dz = z - h.z, d = Math.hypot(dx, dz) || 1;
+    h.x += (dx / d) * step; h.z += (dz / d) * step;
+    h.model.position.set(h.x, height(h.x, h.z), h.z);
+    h.model.rotation.y = Math.atan2(dx, dz);
+    h.unit.x = h.x; h.unit.z = h.z;
+  }
+
+  // --- riding your own wagons
+  const riding = (w) => g.player.mount?.wagon === w;
+  const wagonNearby = () => wagons.find((w) => !w.unit.broken && dist(w.unit.x, w.unit.z, g.player.x, g.player.z) < 5.5);
+  function hopOn(w) {
+    g.player.mount = { wagon: w, carry(p) { p.x = w.unit.x; p.z = w.unit.z; p.y = w.model.position.y + 1.5; } };
+    g.audio.pickup();
+  }
+  // Off the wagon, on to the verge beside it.
+  function setDown() {
+    const p = g.player, w = p.mount.wagon, a = w.model.rotation.y;
+    p.mount = null;
+    p.x = w.unit.x + Math.cos(a) * 2.6; p.z = w.unit.z - Math.sin(a) * 2.6;
+    p.y = height(p.x, p.z); p.vy = 0;
   }
 
   function updateMachines(dt) {
@@ -315,19 +354,32 @@ export function createBusiness(g) {
       if (w.state === 'wait') {
         w.waited += dt;
         works.pose(w.model, 'run', g.time, 0);
-        if (stock.thneeds >= 10 || (stock.thneeds > 0 && w.waited > 15)) {
+        // With you aboard it does not wait for a load: it will take you to town with whatever there is.
+        w.boarded = riding(w) ? w.boarded + dt : 0;
+        if (stock.thneeds >= 10 || (stock.thneeds > 0 && w.waited > 15) || w.boarded > 3) {
           w.load = Math.min(WAGON_LOAD, stock.thneeds);
           stock.thneeds -= w.load;
           w.state = 'out';
           w.waited = 0;
         }
+      } else if (w.state === 'park') {
+        // It brought you to town, and waits a while for you to do your business. Get back on and it goes at once.
+        w.park -= dt;
+        works.pose(w.model, 'run', g.time, 0);
+        if (w.park <= 0 || riding(w)) w.state = 'back';
       } else {
         const out = w.state === 'out';
         w.s += (out ? 1 : -1) * WAGON_SPEED * dt;
         works.pose(w.model, 'run', g.time, 1);
         smoke(w.model, dt, w, 0.35, 0.5);
-        if (out && w.s >= ROAD_TO_TOWN) { sale(w.load); w.load = 0; w.state = 'back'; }
-        if (!out && w.s <= 0) { w.s = 0; w.state = 'wait'; }
+        if (out && w.s >= ROAD_TO_TOWN) {
+          if (w.load) sale(w.load);
+          w.load = 0;
+          w.state = riding(w) ? 'park' : 'back';
+          w.park = WAGON_WAIT;
+          if (riding(w)) { setDown(); g.ui.tip('Town. The wagon will wait here a minute for you.', 6); }
+        }
+        if (!out && w.s <= 0) { w.s = 0; w.state = 'wait'; if (riding(w)) setDown(); }
       }
       const at = roadPoint(w.s), side = w.state === 'back' ? -1 : 1;
       u.x = at.x + Math.cos(at.heading) * w.lane * side;
@@ -335,13 +387,36 @@ export function createBusiness(g) {
       w.model.position.set(u.x, height(u.x, u.z) + Math.abs(Math.sin(w.s * 0.9)) * 0.08, u.z);
       w.model.rotation.y = at.heading + (w.state === 'back' ? Math.PI : 0);
       w.model.userData.setLoad?.(w.load / WAGON_LOAD);
+      if (riding(w)) g.player.mount.carry(g.player);
     }
 
     for (const h of hackers) {
       const u = h.unit;
       if (u.broken) continue;
       const near = (t) => dist(t.x, t.z, h.x, h.z);
+      h.brush.rotation.x += dt * (h.sweeping ? 14 : 1.5);
+      h.sweeping = false;
       if (h.state === 'seek') {
+        // Tufts first. Its own, wherever they fell, and anybody's lying near it. It drives round with the brush going
+        // and blows what it sweeps up home to the shop; its steam comes back up while it does.
+        let tuft = null, tuftD = Infinity;
+        for (const t of pickups) { const d = near(t); if ((t.owner === h || (!t.owner && d < SWEEP_RANGE)) && d < tuftD) { tuft = t; tuftD = d; } }
+        if (tuft) {
+          h.sweeping = true;
+          h.rest -= dt;
+          if (tuftD > 1) { drive(h, tuft.x, tuft.z, Math.min(SWEEP_SPEED * dt, tuftD)); h.swept += Math.min(SWEEP_SPEED * dt, tuftD); }
+          for (let i = pickups.length - 1; i >= 0; i--) {
+            const t = pickups[i];
+            if (near(t) > BRUSH) continue;
+            scene.remove(t.model);
+            pickups.splice(i, 1);
+            stock.tufts++;
+            g.fx.burst(t.x, height(t.x, t.z) + 0.6, t.z, t.color || PALETTE.thneedPink, 4, 4, 0.5);
+          }
+          works.pose(h.model, 'run', g.time, 0.6);
+          smoke(h.model, dt, h, 0.4, 0.5);
+          continue;
+        }
         // After a smack it stands and gets steam up again, so one hacker takes most of an hour to clear the valley.
         if (h.rest > 0) { h.rest -= dt; works.pose(h.model, 'run', g.time, 0.15); smoke(h.model, dt, h, 0.8, 0.5); continue; }
         works.pose(h.model, 'run', g.time, 0.3);
@@ -357,17 +432,14 @@ export function createBusiness(g) {
         if (!target) continue;
         const dx = target.x - h.x, dz = target.z - h.z, d = Math.hypot(dx, dz);
         if (d < 5) { h.state = 'whack'; h.timer = 0; continue; }
-        h.x += (dx / d) * 6 * dt; h.z += (dz / d) * 6 * dt;
-        h.model.position.set(h.x, height(h.x, h.z), h.z);
-        h.model.rotation.y = Math.atan2(dx, dz);
-        u.x = h.x; u.z = h.z;
+        drive(h, target.x, target.z, 6 * dt);
         smoke(h.model, dt, h, 0.4, 0.5);
       } else {
         h.timer += dt;
         works.pose(h.model, 'run', g.time, 1);
         if (h.timer < 2) continue;
         for (const tree of g.world.treesNear(h.x, h.z, 13).filter((t) => t.state === 'standing').sort((a, b) => near(a) - near(b)).slice(0, 4)) {
-          tree.byMachine = true;
+          tree.byMachine = h; // its tufts are this hacker's to sweep up
           g.world.fell(tree, h.x, h.z);
         }
         h.state = 'seek';
@@ -385,6 +457,7 @@ export function createBusiness(g) {
     u.hp -= amount;
     if (u.hp > 0) return;
     wreckUnit(u);
+    if (g.player.mount?.wagon.unit === u) setDown(); // wrecked under you
     g.audio.crash();
     g.ui.tip(`Your ${u.name} has been wrecked. Stand by it and press [E] to mend it for $${repairCost(u)}.`);
   }
@@ -451,10 +524,12 @@ export function createBusiness(g) {
 
   function hint() {
     const p = g.player, wreck = brokenNearby();
+    if (p.mount) return '[E] hop off';
     if (wreck) return `[E] mend the ${wreck.name} · $${repairCost(wreck)}${stock.money < repairCost(wreck) ? ` (you have $${Math.floor(stock.money)})` : ''}`;
     if (canKnit()) return p.knitting ? 'Knitting…' : 'Hold [E] to knit a Thneed';
     if (canTake()) return '[E] take Thneeds to sell';
     if (atStall() && p.thneeds > 0) return demand > 0 ? 'Hold [E] to sell' : 'The town has all the Thneeds it wants for now';
+    if (wagonNearby()) return '[E] hop on the Thneed Wagon';
     const vendor = vendorNearby();
     if (vendor) return '[E] see what is for sale';
     return '';
@@ -462,8 +537,11 @@ export function createBusiness(g) {
 
   function use(dt, held, pressed) {
     const p = g.player, wreck = brokenNearby();
-    if (pressed && !wreck && vendorNearby()) { g.openMenu('vendor'); return; }
     p.knitting = false;
+    if (p.mount) { if (pressed) setDown(); return; }
+    // Knitting and the counter come first: a wagon waits right beside them.
+    if (pressed && !wreck && !canKnit() && !canTake() && !(atStall() && p.thneeds > 0) && wagonNearby()) { hopOn(wagonNearby()); return; }
+    if (pressed && !wreck && vendorNearby()) { g.openMenu('vendor'); return; }
     if (wreck && pressed) {
       if (stock.money >= repairCost(wreck)) {
         money(-repairCost(wreck));
