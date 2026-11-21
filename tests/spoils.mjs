@@ -38,10 +38,10 @@ assert.deepEqual(drops.wight, ['deadwood']);
 assert.ok(drops.lootChampion.length >= 5 && drops.lootChampion.every((k) => k === 'pelt'), `a champion leaves a heap (${drops.lootChampion.length})`);
 
 // Out in the woods you can see what could be made, but the making is done at home.
-await run('g.crafting.spoils.pelt = 6'); // five more Bar-ba-loots' worth, without the five fights
+await run('g.crafting.spoils.pelt = 10'); // nine more Bar-ba-loots' worth, without the nine fights
 const suit = (await run('return g.crafting.recipes()')).find((r) => r.id === 'suit');
 assert.equal(suit.name, 'Bar-ba-loot suit');
-assert.deepEqual(suit.cost, { pelt: 6 });
+assert.deepEqual(suit.cost, { pelt: 10 });
 assert.equal(await run('return g.crafting.make("suit")'), false, 'not out here');
 await run('t.stand(4, 9, 0, 0); t.press("KeyC"); t.run(0.1)');
 assert.match(await run('return document.getElementById("menu").textContent'), /Bar-ba-loot suit/, '[C] shows what can be made');

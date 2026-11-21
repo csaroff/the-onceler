@@ -8,7 +8,7 @@ Play it at https://csaroff.github.io/the-onceler/, or run it yourself:
     npm run dev        # then open the printed URL
 
 Controls: WASD move, Shift run, Space jump, click to swing the axe, right-click or F for the sling, E to use,
-B for the business menu, V for defences, Q to close a menu, M to turn the music on and off.
+B for the business menu, V for defences, C to make things, Q to close a menu, M to turn the music on and off.
 
 ## How it plays
 
@@ -31,6 +31,8 @@ The Lorax comes out of the first stump, once, up close. After that he is a figur
 - He commands from the spire for as long as the raid lasts: he sends reserves down and raises the stumps as his dead.
   Reach the spire and he is gone, and nothing more comes down.
 - Knocked out in a charge, you wake at the shop a quarter poorer.
+- What you kill leaves something behind: pelts, feathers, scales, deadwood. Walk over them, and at the shop press C
+  to make what no vendor sells: a Bar-ba-loot suit, Swomee-feather shoes, Humming-Fish scale shot, a stump-wood staff.
 - Defences are walls, hedges and the guns of The Butter Battle Book.
 - His seat is far to the north-west (the compass shows it after the first raid). Kill him there and the war is over.
 - The game saves itself every ten seconds (in the browser's local storage) and offers to carry on next time;
@@ -44,6 +46,7 @@ Every line of dialogue is from the book and lives in `src/quotes.js`.
 - `src/terrain.js`: the endless land: height, cliffs, forest, the road, the town and his seat
 - `src/world.js`: ground, sky, plants and trees, and how they decay
 - `src/player.js`, `src/business.js`, `src/wildlife.js`, `src/war.js`, `src/lorax.js`, `src/defences.js`, `src/scenes.js`
+- `src/crafting.js`: what the animals leave behind, and what is made of it
 - `src/audio.js`, `src/music.js`: synthesised sound effects, and the background waltz written out as notes
 - `src/art/`: one file per subject; every model is built in code. `docs/ART.md` is the brief.
 - `src/ink.js`, `src/toon.js`: the drawing style (flat colour, pen outline)

@@ -161,6 +161,7 @@ const report = await page.evaluate(([limit, duels]) => {
     waitScene();
     tick(); // always let time pass, whatever the bot decides, so it can never spin on the spot
     shop();
+    if (g.crafting.atShop()) for (const r of g.crafting.recipes()) if (r.can && g.crafting.make(r.id)) mark(`made: first ${r.name}`);
     const o = g.business.owned, w = g.war, automated = o.wagon > 0;
     const wreck = g.business.units.find((u) => u.broken && g.stock.money >= Math.round(u.base * 0.2));
     const gear = gearWanted();
@@ -193,6 +194,10 @@ const report = await page.evaluate(([limit, duels]) => {
     } else if (p.tufts >= p.maxTufts || (p.tufts > 0 && !g.business.pickups.length && p.tufts + 4 > p.maxTufts)) { // fill the cart first
       doing('carry tufts home');
       goTo(1.5, 4.5, 1.5); // well inside the shop's drop-off radius
+    } else if (!foes().length && g.crafting.pickups.some((q) => away(q) < 60)) {
+      doing('pick up spoils');
+      const q = near(g.crafting.pickups.filter((q) => away(q) < 60));
+      goTo(q.x, q.z, 1, 20);
     } else if (g.business.pickups.some((t) => Math.hypot(t.x, t.z) < 160)) {
       doing('gather tufts');
       const t = near(g.business.pickups.filter((q) => Math.hypot(q.x, q.z) < 160));
@@ -215,7 +220,7 @@ const report = await page.evaluate(([limit, duels]) => {
     trace, marks, knockoutAt, income, hurtBy, armies, warLog, duelLog, trips, dead: g.dead, wreckedMinutes: +(wreckedSeconds / 60).toFixed(1),
     shopTufts: g.stock.tufts, shopThneeds: g.stock.thneeds, broken: g.business.units.filter((u) => u.broken).map((u) => u.kind),
     minutes: minute(), money: Math.round(g.stock.money), sold: g.stock.sold, felled: g.story.felled, raid: g.war.raid, owned: o, gear: g.business.gear,
-    guns: g.defences.structures.length, health: p.maxHealth, axe: p.axe, ruin: +g.ruin.toFixed(2),
+    guns: g.defences.structures.length, spoils: g.crafting.spoils, made: g.crafting.made, health: p.maxHealth, axe: p.axe, ruin: +g.ruin.toFixed(2),
   };
 }, [minutes, duels]);
 await browser.close();
@@ -226,6 +231,7 @@ console.log('minute  money  milestone');
 for (const [name, minute, money] of report.marks) console.log(`${String(minute).padStart(6)}  ${String('$' + money).padStart(6)}  ${name}`);
 console.log(`\nafter ${report.minutes} min${report.dead ? ' (DEAD)' : ''}: $${report.money}, ${report.sold} sold, ${report.felled} felled, ${report.raid} raids beaten, knocked out ${report.knockoutAt.length} times, ${report.guns} guns, ${report.trips} trips to town`);
 console.log('owned:', JSON.stringify(report.owned), 'gear:', JSON.stringify(report.gear), `axe ${report.axe}, health ${report.health}`);
+console.log('spoils:', JSON.stringify(report.spoils), 'made:', JSON.stringify(report.made));
 console.log(`at the shop: ${report.shopTufts} tufts, ${report.shopThneeds} Thneeds; wrecked now: ${report.broken.join(', ') || 'nothing'}; machine-minutes spent wrecked: ${report.wreckedMinutes}`);
 console.log(`Thneeds sold per five minutes: ${report.income.join(', ')}`);
 console.log(`knocked out at minutes: ${report.knockoutAt.join(', ') || 'never'}`);

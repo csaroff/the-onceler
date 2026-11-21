@@ -15,10 +15,10 @@ const HEAP = 6;
 
 // Each can be made three times over; the second costs twice the first, the third three times.
 export const RECIPES = [
-  { id: 'suit', name: 'Bar-ba-loot suit', blurb: 'every blow costs you a fifth less', spoil: 'pelt', count: 6 },
+  { id: 'suit', name: 'Bar-ba-loot suit', blurb: 'every blow costs you a fifth less', spoil: 'pelt', count: 10 },
   { id: 'shoes', name: 'Swomee-feather shoes', blurb: 'lighter on your feet, even backing away', spoil: 'feather', count: 5 },
-  { id: 'shot', name: 'Humming-Fish scale shot', blurb: 'slung stones cut deeper', spoil: 'scale', count: 5 },
-  { id: 'staff', name: 'Stump-wood staff', blurb: 'you get your wind back sooner', spoil: 'deadwood', count: 5 },
+  { id: 'shot', name: 'Humming-Fish scale shot', blurb: 'slung stones cut deeper', spoil: 'scale', count: 3 },
+  { id: 'staff', name: 'Stump-wood staff', blurb: 'you get your wind back sooner', spoil: 'deadwood', count: 10 },
 ];
 const MOST = 3;
 
