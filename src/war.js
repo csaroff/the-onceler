@@ -448,7 +448,7 @@ export function createWar(g) {
     if (war.phase === 'calm') {
       war.calm -= dt;
       const nearSeat = dist(p.x, p.z, THRONE.x, THRONE.z) < 420; // he does not come out to meet someone already on his doorstep
-      if (war.calm <= 0 && war.threat >= Math.min(40, 6 + n * 3) && !nearSeat) {
+      if (war.calm <= 0 && war.threat >= Math.min(40, 12 + n * 3) && !nearSeat) {
         const at = g.lorax.sight();
         war.bearing = Math.atan2(at.x - p.x, at.z - p.z);
         war.phase = 'omen';
