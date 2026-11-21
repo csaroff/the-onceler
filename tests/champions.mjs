@@ -73,6 +73,29 @@ await run(`t.until(() => c.state === 'mark', 5); face(c); g.player.yaw += Math.P
   for (let i = 0; i < 200 && c.state !== 'spent'; i++) { g.keys.KeyW = true; g.keys.ShiftLeft = true; g.step(0.05); } g.keys.KeyW = false; g.keys.ShiftLeft = false`);
 assert.ok(!(await run('return hits.includes(6)')), 'running gets you out from under it');
 
+// ---- A duel is between the two of you, and the dodging carries it about. Neither a stray stone nor the ground you
+// cover getting out from under things may end it.
+await run(`for (const e of [...g.war.enemies]) g.war.hurt(e, 1e9, 0, 0); t.run(3); t.stand(field.x, field.z, field.x, field.z - 10);
+  g.war.enabled = true; g.war.bearing = 0; g.war.muster(); window.c = g.war.champion; c.special = 1e9;
+  g.war.hurt(c, 0.1, g.player.x, g.player.z); t.run(0.1)`);
+assert.equal(await run('return g.war.phase'), 'duel', 'the duel is on');
+// A slung stone goes wide and lands in their line. They hold: it was not meant for them, and it does them no harm.
+const trooper = await run(`const e = g.war.enemies.find((e) => e.state === 'line'), hp = e.hp;
+  g.war.hurt(e, 1, g.player.x, g.player.z); t.run(0.3); return { hp, now: e.hp, state: e.state, phase: g.war.phase }`);
+assert.deepEqual([trooper.now, trooper.state, trooper.phase], [trooper.hp, 'line', 'duel'], 'a stray blow on the line during a duel changes nothing');
+// The fight drifts a hundred metres from where it began, with the champion on your heels all the way. Still a duel.
+await run(`c.x = field.x + 100; c.z = field.z; c.best = Infinity; t.stand(field.x + 106, field.z, c.x, c.z); t.run(1)`);
+assert.equal(await run('return g.war.phase'), 'duel', 'a duel that has wandered is still a duel');
+// Leave the champion behind, though, and you have run from it.
+await run(`t.stand(c.x + 90, c.z, c.x, c.z); t.run(0.3)`);
+assert.equal(await run('return g.war.phase'), 'fight', 'eighty metres clear of the champion is running away');
+assert.match(await tip(), /ran from it/i);
+// Before any duel is on, a blow on the line still ends the truce, as it always did.
+await run(`g.war.clear(); for (const e of [...g.war.enemies]) g.war.hurt(e, 1e9, 0, 0); t.run(3); t.stand(field.x, field.z, field.x, field.z - 10);
+  g.war.bearing = 0; g.war.muster(); g.war.hurt(g.war.enemies.find((e) => e.state === 'line'), 1, g.player.x, g.player.z); t.run(0.1)`);
+assert.equal(await run('return g.war.phase'), 'fight', 'strike the line while the champion waits, and they all come');
+await run('g.war.clear(); g.war.enabled = false');
+
 // ---- Ordinary troops have no such tricks.
 await run(`fresh('loot', 9); const e = g.war.spawn('fish', field.x + 12, field.z); t.run(12)`);
 assert.ok(await run("return g.war.rings.length === 0 && g.war.marks.length === 0"), 'no rings and no marks from the rank and file');
