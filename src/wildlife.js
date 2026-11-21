@@ -82,7 +82,9 @@ export function createWildlife(g) {
   function updateLoots(dt) {
     const p = g.player;
     // Keep the woods round you lived in, a few at a time.
-    if (loots.length < LOOTS && Math.random() < dt * 2) settleLoot(70, 170);
+    // They live in the wood you are standing in as much as in the one over the hill, so felling round yourself has
+    // someone to answer to. Not so close that one appears at your elbow.
+    if (loots.length < LOOTS && Math.random() < dt * 2) settleLoot(30, 170);
     for (let i = loots.length - 1; i >= 0; i--) {
       const l = loots[i], far = dist(l.x, l.z, p.x, p.z);
       if (far > TOO_FAR) { remove(l); continue; }

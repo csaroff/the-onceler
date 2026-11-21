@@ -37,7 +37,7 @@ export async function openGame({ query = '?test', start = true } = {}) {
         return tree;
       },
       // Fell trees without the ceremony, as a Super-Axe-Hacker would, until `count` are down near a spot.
-      clearcut(x, z, count) {
+      clearcut(x, z, count, wait = 3) {
         let n = 0;
         for (const tree of g.world.treesNear(x, z, 120).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))) {
           if (n >= count) break;
@@ -46,7 +46,7 @@ export async function openGame({ query = '?test', start = true } = {}) {
           g.world.fell(tree, x, z);
           n++;
         }
-        this.run(3);
+        this.run(wait);
         return n;
       },
       // Walk over every tuft lying about, then take them home.

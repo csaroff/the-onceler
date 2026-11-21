@@ -54,18 +54,39 @@ s = await read();
 assert.equal(s.locals + s.enemies, 0, 'before the Lorax has brought his first army, nothing here will fight you');
 
 // ---- Once he has, the same animals stop running. Take their trees and they come for you.
-const lootsBefore = s.loots;
-await run('g.story.seen.add("wave"); t.clearcut(g.player.x, g.player.z, 120); t.run(12)');
+// Watch the moment the first one turns: the angry animal is standing exactly where a Bar-ba-loot was a moment before.
+const turned = await run(`
+  g.story.seen.add('wave');
+  t.clearcut(g.player.x, g.player.z, 120, 0);
+  for (let i = 0; i < 400; i++) {
+    const was = g.wildlife.loots.map((l) => ({ x: l.model.position.x, z: l.model.position.z }));
+    g.step(0.05);
+    const e = g.war.enemies.find((o) => o.local);
+    if (e) return { kind: e.kind, gap: Math.min(...was.map((w) => Math.hypot(w.x - e.x, w.z - e.z))), state: e.state };
+  }
+  return null;
+`);
+assert.ok(turned, 'a Bar-ba-loot turns on you');
+assert.equal(turned.kind, 'loot', 'it is a Bar-ba-loot, not some other breed of monster');
+assert.ok(turned.gap < 0.5, `it is the same animal, where it stood (${turned.gap.toFixed(2)} m from where a Bar-ba-loot was)`);
+assert.equal(turned.state, 'rage', 'it rears up and roars before it comes');
+
+// More follow: everything that lived in the wood you cleared, though only so many at once.
+assert.ok(await run('return t.until(() => g.war.locals() >= 3, 12)'), 'the others that lived here turn too');
 s = await read();
-assert.ok(s.locals >= 3, `the Bar-ba-loots that lived here have turned on you (${s.locals})`);
-assert.ok(s.locals <= 9, 'though only so many at once');
-assert.ok(s.loots <= lootsBefore - s.locals + 3, `they are the same animals: ${lootsBefore} lived here, ${s.locals} are attacking, ${s.loots} are left`);
-const kinds = await run('return [...new Set(g.war.enemies.filter((e) => e.local).map((e) => e.kind))]');
-assert.deepEqual(kinds, ['loot'], 'they are Bar-ba-loots, not some other breed of monster');
+assert.ok(s.locals <= 9, `only so many at once (${s.locals})`);
+await run('const e = g.war.enemies.find((o) => o.local); g.player.yaw = Math.atan2(g.player.x - e.x, g.player.z - e.z); g.step(0.02)');
 await shot('wilds-3-enraged');
-assert.ok(await run('return t.until(() => g.player.health < g.player.maxHealth, 30)'), 'and they hurt');
-// They are dangerous: an angry Bar-ba-loot takes a fifth of your health with each blow.
+
+// They are dangerous. Each blow takes a fifth of your health, and standing your ground against a handful of them
+// with your hands in your pockets puts you on the floor in well under half a minute.
 assert.ok(await run('return g.war.enemies.find((e) => e.local).def.dmg / g.player.maxHealth') >= 0.2);
+await run('g.stock.money = 100');
+assert.ok(await run('return t.until(() => g.stock.money < 100, 25)'), 'they knock you out');
+s = await read();
+assert.equal(s.money, 75, 'which costs you a quarter of what you had');
+assert.ok(Math.hypot(s.x - 5, s.z - 11) < 2, 'and you come round back at the shop');
+assert.equal(s.dead, false, 'but alive: only a champion between the lines kills you for good');
 
 await game.close();
 console.log('wilds: ok');
