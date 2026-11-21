@@ -8,6 +8,7 @@ import { PALETTE } from './toon.js';
 
 export const PRICE = 3.98;
 const KNIT_SECONDS = 3.5, HAND_TUFTS = 4, HACKER_TUFTS = 8, HACKER_REST = 18, WAGON_LOAD = 24;
+const HACKER_SPACING = 30; // a smack reaches 13 m, so trees this far apart are in separate patches
 const FACTORY_PRICES = [250, 800, 2400, 6000];
 const FACTORY_RATE = [0, 0.5, 1.2, 3, 7];     // Thneeds a second, by factory level
 const THNEEDS_PER_TUFT = [1, 1, 2, 3, 4];     // a biggered factory knits thinner Thneeds
@@ -245,7 +246,7 @@ export function createBusiness(g) {
     }
     if (id === 'hacker') {
       const model = place(works.build({ kind: 'hacker' }), SHOP.x - 12 - hackers.length * 5, SHOP.z - 12);
-      hackers.push({ model, x: model.position.x, z: model.position.z, state: 'seek', timer: 0, rest: 0, smoke: 0, unit: unit('hacker', 'Super-Axe-Hacker', model, 2.5, 14, 350) });
+      hackers.push({ model, x: model.position.x, z: model.position.z, state: 'seek', target: null, timer: 0, rest: 0, smoke: 0, unit: unit('hacker', 'Super-Axe-Hacker', model, 2.5, 14, 350) });
       g.story.flag('hacker', 'hacker');
     }
     return true;
@@ -319,7 +320,17 @@ export function createBusiness(g) {
         if (h.rest > 0) { h.rest -= dt; works.pose(h.model, 'run', g.time, 0.15); smoke(h.model, dt, h, 0.8, 0.5); continue; }
         works.pose(h.model, 'run', g.time, 0.3);
         if (!standing.length) continue;
-        const target = standing.reduce((a, b) => (near(a) < near(b) ? a : b));
+        // Each hacker picks a tree and sticks with it, and picks one well away from the others' trees,
+        // so that no two of them work the same patch.
+        if (!h.target || h.target.state !== 'standing') {
+          const others = hackers.filter((o) => o !== h && !o.unit.broken).map((o) => (o.target?.state === 'standing' ? o.target : o));
+          const clearOf = (t, gap) => others.every((o) => dist(t.x, t.z, o.x, o.z) >= gap);
+          const nearest = (list) => (list.length ? list.reduce((a, b) => (near(a) < near(b) ? a : b)) : null);
+          h.target = nearest(standing.filter((t) => clearOf(t, HACKER_SPACING))) // a patch of its own
+            || nearest(standing.filter((t) => clearOf(t, 1)))                     // few trees left: at least a tree of its own
+            || nearest(standing);
+        }
+        const target = h.target;
         const dx = target.x - h.x, dz = target.z - h.z, d = Math.hypot(dx, dz);
         if (d < 5) { h.state = 'whack'; h.timer = 0; continue; }
         h.x += (dx / d) * 6 * dt; h.z += (dz / d) * 6 * dt;
@@ -337,6 +348,7 @@ export function createBusiness(g) {
         }
         h.state = 'seek';
         h.rest = HACKER_REST;
+        h.target = null;
       }
     }
   }
