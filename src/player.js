@@ -64,13 +64,12 @@ export function createPlayer(g) {
     if (p.health <= 0) g.knockout();
   };
 
-  // Can you take this step? Not up a cliff, and not out into deep water.
+  // Can you take this step? Not up a cliff, and not out into deep water. The ground decides, whether your feet are on
+  // it or not: a jump does not carry you up a face you could not walk up.
   function open(nx, nz) {
     const here = height(p.x, p.z), dx = nx - p.x, dz = nz - p.z, d = Math.hypot(dx, dz) || 1;
     const ahead = height(p.x + (dx / d) * 0.8, p.z + (dz / d) * 0.8);
-    if (ahead < LAKE_Y - 1.3) return false;
-    if (!p.grounded) return height(nx, nz) <= p.y + 0.3; // in the air you cannot move into ground above your feet
-    return ahead - here <= STEEP * 0.8;
+    return ahead >= LAKE_Y - 1.3 && ahead - here <= STEEP * 0.8;
   }
 
   p.update = (dt, keys) => {
@@ -78,7 +77,7 @@ export function createPlayer(g) {
     const len = Math.hypot(forward, strafe);
     p.moving = 0;
     // Standing on a face too steep to stand on, you slide down it, and cannot jump your way up it.
-    const sliding = p.grounded && steepness(p.x, p.z) > STEEP;
+    const steep = steepness(p.x, p.z) > STEEP, sliding = steep && p.y <= height(p.x, p.z) + 0.05;
     if (sliding) {
       const gx = height(p.x + 1, p.z) - height(p.x - 1, p.z), gz = height(p.x, p.z + 1) - height(p.x, p.z - 1), gl = Math.hypot(gx, gz) || 1;
       p.x -= (gx / gl) * 9 * dt; p.z -= (gz / gl) * 9 * dt;
@@ -102,7 +101,7 @@ export function createPlayer(g) {
       // Coming down hard hurts: walk off a cliff and you may not get up.
       if (p.vy < -SAFE_FALL) p.damage((-p.vy - SAFE_FALL) * 0.6);
       p.y = ground;
-      p.vy = keys.Space && !p.knitting && !sliding ? 8 : 0;
+      p.vy = keys.Space && !p.knitting && steepness(p.x, p.z) <= STEEP ? 8 : 0;
       p.grounded = p.vy === 0;
     } else p.grounded = p.y - ground < 0.25 && p.vy <= 0;
 

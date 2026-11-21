@@ -183,10 +183,13 @@ export function createWar(g) {
     return hits > 0;
   };
 
-  // Can something on foot get from one spot to the next? Not up a cliff, and not into deep water. Down is always possible.
+  // Can something on foot get from one spot to the next? Not up a cliff, and not into deep water. A cliff face is
+  // closed to it whichever way it is walking, so it cannot work its way up by going along the face. Down is always possible.
   function passable(x0, z0, x1, z1) {
-    const h1 = height(x1, z1);
-    return h1 > LAKE_Y - 1 && h1 - height(x0, z0) <= STEEP * Math.hypot(x1 - x0, z1 - z0) + 0.15;
+    const h0 = height(x0, z0), h1 = height(x1, z1);
+    if (h1 < LAKE_Y - 1) return false;
+    if (h1 <= h0) return true;
+    return h1 - h0 <= STEEP * Math.hypot(x1 - x0, z1 - z0) + 0.15 && steepness(x1, z1) <= STEEP;
   }
   const DETOURS = [0, 0.7, -0.7, 1.4, -1.4, 2.1, -2.1];
   function moveToward(e, tx, tz, speed, dt) {

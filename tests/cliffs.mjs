@@ -35,8 +35,10 @@ await run('t.run(12)');
 const chaser = await run('return { y: loot.y, hp: loot.hp, alive: g.war.enemies.includes(loot) }');
 assert.ok(chaser.alive && chaser.y < footY + cliff.drop * 0.4, 'a Bar-ba-loot at the foot of the cliff is still at the foot of it');
 assert.equal((await read()).health, 10, 'and has not laid a paw on you');
-await run('t.run(25)');
-assert.equal(await run('return g.war.enemies.includes(loot)'), false, 'in the end it gives up and goes');
+// It paces the foot of the face looking for a way up. Its patience is 28 seconds without getting any nearer.
+const left = await run('return t.until(() => !g.war.enemies.includes(loot), 90)');
+assert.ok(left, 'in the end it gives up and goes');
+assert.equal((await read()).health, 10, 'without ever having reached you');
 
 // ---- Backing away is slow: four seconds backwards covers about half what four seconds forwards does.
 await run('t.stand(0, 60, 0, 0)');
