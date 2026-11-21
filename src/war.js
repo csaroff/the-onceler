@@ -2,6 +2,8 @@
 // between the lines and dares you to come and fight it alone. Beat the champion and part of the army leaves; refuse,
 // and the whole line charges. He stands on the ridge behind them for as long as it lasts, sending more down and
 // raising the stumps as his dead. It ends at his seat, far to the north-west, if you can get there and kill him.
+import * as THREE from 'three';
+import { toon, ball } from './toon.js';
 import * as barbaloot from './art/barbaloot.js';
 import * as swanArt from './art/swan.js';
 import * as fishArt from './art/fish.js';
@@ -21,11 +23,20 @@ export const KINDS = {
   // His dead: what he raises out of the stumps and the glumped ponds.
   wight: { art: horrors, opts: { kind: 'stumper' }, hp: 5, speed: 6.8, dmg: 2, reach: 2, cooldown: 1.1, size: 0.9, gait: 'walk' },
   glupp: { art: horrors, opts: { kind: 'glupp' }, hp: 22, speed: 2.6, dmg: 5, reach: 2.6, cooldown: 2, size: 1.3, gait: 'walk' },
-  lootChampion: { art: barbaloot, opts: { variant: 'champion' }, species: 'loot', hp: 60, speed: 5.4, dmg: 4, reach: 3.6, cooldown: 1.9, size: 1.5, gait: 'walk', swing: 1.1, boss: 'The Bar-ba-loot Champion' },
-  swanChampion: { art: swanArt, opts: { variant: 'champion' }, species: 'swan', hp: 60, speed: 14, dmg: 4, size: 2.4, flies: 12, gait: 'fly', boss: 'The Swomee-Swan Champion' },
-  fishChampion: { art: fishArt, opts: { variant: 'champion' }, species: 'fish', hp: 80, speed: 3, dmg: 2.5, range: 22, cooldown: 2.8, size: 1.6, gait: 'walk', shot: 'glob', volley: 3, boss: 'The Humming-Fish Champion' },
+  lootChampion: { art: barbaloot, opts: { variant: 'champion' }, species: 'loot', hp: 60, speed: 5.4, dmg: 4, reach: 3.6, cooldown: 1.9, size: 1.5, gait: 'walk', swing: 1.1, special: 'slam', boss: 'The Bar-ba-loot Champion' },
+  swanChampion: { art: swanArt, opts: { variant: 'champion' }, species: 'swan', hp: 60, speed: 14, dmg: 4, size: 2.4, flies: 12, gait: 'fly', special: 'dives', boss: 'The Swomee-Swan Champion' },
+  fishChampion: { art: fishArt, opts: { variant: 'champion' }, species: 'fish', hp: 80, speed: 3, dmg: 2.5, range: 22, cooldown: 2.8, size: 1.6, gait: 'walk', shot: 'glob', volley: 3, special: 'leap', boss: 'The Humming-Fish Champion' },
   king: { art: loraxArt, opts: {}, scale: 2, hp: 320, speed: 3.4, dmg: 4, range: 34, cooldown: 2.4, size: 1.4, gait: 'walk', shot: 'glob', attack: 'hurl', swing: 1.2, splash: 2.5, raises: true, boss: 'The Lorax' },
 };
+// Each champion has one move of its own. It shows you it is coming, there is one way out of it, and a champion that
+// has missed with it is stuck for a moment: that is when to hit it.
+// The Bar-ba-loot Champion brings its trunk down and a shock runs out along the ground. Be in the air when it reaches you.
+const SLAM = { within: 14, windup: 1.2, speed: 14, reach: 18, dmg: 5, spent: 2.6 };
+// The Swomee-Swan Champion screams and dives three times running. Each dive follows you half way down, then commits to
+// where you are: at a walk you are still there when it lands; at a run you are not.
+const DIVES = { within: 30, scream: 0.9, count: 3, seconds: 0.9, commit: 0.5, radius: 4, between: 0.6, rest: 3.5 };
+// The Humming-Fish Champion marks the ground under you, and a second later jumps on it. Backing away is too slow.
+const LEAP = { within: 26, follow: 1, air: 0.9, radius: 4.5, dmg: 6, spent: 2.8 };
 const BEATEN_CALM = 240;       // seconds of peace after an army has knocked you out
 export const TRUCE = 50;        // seconds the champion waits between the lines before the army loses patience
 export const LEAVE_SHARE = 0.6; // the share of an army that goes home when its champion falls
@@ -108,6 +119,49 @@ export function createWar(g) {
     }
   }
 
+  // ---------------------------------------------------------------- champions' moves
+  // A circle of lumps lying on the ground, whatever shape the ground is.
+  const dustMat = toon('#d8c9a0'), markMat = toon('#ff5a4a');
+  function circle(material, count, size) {
+    const group = new THREE.Group();
+    for (let i = 0; i < count; i++) { const lump = new THREE.Mesh(ball, material); lump.scale.set(size, size * 0.6, size); group.add(lump); }
+    scene.add(group);
+    return group;
+  }
+  function layCircle(group, x, z, r, lift = 0.3) {
+    group.children.forEach((lump, i) => {
+      const a = (i / group.children.length) * Math.PI * 2, lx = x + Math.cos(a) * r, lz = z + Math.sin(a) * r;
+      lump.position.set(lx, Math.max(height(lx, lz), LAKE_Y) + lift, lz);
+    });
+  }
+  const rings = [], marks = [];
+  war.rings = rings; war.marks = marks;
+  // Said the first time each move is seen, and never again.
+  function warn(flag, text) { if (g.story.flag(flag)) g.ui.tip(text, 7); }
+  function updateMoves(dt) {
+    const p = g.player;
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const ring = rings[i], before = ring.r, d = dist(p.x, p.z, ring.x, ring.z);
+      ring.r += SLAM.speed * dt;
+      layCircle(ring.model, ring.x, ring.z, ring.r);
+      // It catches you as it passes, if your feet are on the ground.
+      if (before < d && d <= ring.r && p.y < height(p.x, p.z) + 0.4 && !p.mount) { p.damage(SLAM.dmg); ring.owner.stall = 0; }
+      if (ring.r > SLAM.reach) { scene.remove(ring.model); rings.splice(i, 1); }
+    }
+    for (let i = marks.length - 1; i >= 0; i--) {
+      const mark = marks[i];
+      if (mark.owner.hp > 0 && enemies.includes(mark.owner)) { layCircle(mark.model, mark.x, mark.z, LEAP.radius * (0.92 + 0.08 * Math.sin(g.time * 14))); continue; }
+      scene.remove(mark.model); marks.splice(i, 1); // whoever made it is gone
+    }
+  }
+  function removeMark(e) {
+    const i = marks.indexOf(e.mark);
+    if (i >= 0) { scene.remove(e.mark.model); marks.splice(i, 1); }
+    e.mark = null;
+  }
+  // Is it time for a champion's own move? Only against you, and only from close enough.
+  const ready = (e, d, within) => e.def.special && e.special <= 0 && e.target.type === 'player' && d < within;
+
   // ---------------------------------------------------------------- enemies
   function spawn(kind, x, z, state = 'move') {
     const def = KINDS[kind], model = def.art.build(def.opts);
@@ -117,7 +171,7 @@ export function createWar(g) {
     const e = {
       kind, def, model, x, z, y: height(x, z) + (def.flies || 0), hp: def.hp * tough, maxHp: def.hp * tough, state, timer: 0,
       cooldown: rand(0.3, 1.5), target: null, think: 0, stall: 0, best: Infinity, side: 0, sideTimer: 0, local: false,
-      phase: rand(0, 6), heading: 0, slow: 0, brood: 9, volley: 0, from: { x, y: 0, z }, aim: { x, y: 0, z },
+      phase: rand(0, 6), heading: 0, slow: 0, brood: 9, volley: 0, special: rand(5, 8), dives: 0, restFor: 0, mark: null, from: { x, y: 0, z }, aim: { x, y: 0, z },
     };
     enemies.push(e);
     return e;
@@ -232,6 +286,18 @@ export function createWar(g) {
     e.cooldown -= dt;
     if (d < e.best - 1) { e.best = d; e.stall = 0; }
 
+    if (e.state === 'move' && def.special === 'slam' && ready(e, d, SLAM.within)) {
+      e.state = 'windup'; e.timer = 0;
+      g.audio.roar();
+      warn('tellSlam', 'It is going to bring the trunk down. Jump when the ground jumps.');
+    } else if (e.state === 'move' && def.special === 'leap' && ready(e, d, LEAP.within)) {
+      e.state = 'mark'; e.timer = 0;
+      e.mark = { x: at.x, z: at.z, owner: e, model: circle(markMat, 22, 0.38) };
+      marks.push(e.mark);
+      g.audio.roar();
+      warn('tellLeap', 'It has marked the ground under you, and it is going to land there. Get out from under it: turn and run.');
+    }
+
     if (e.state === 'move') {
       if (d > need) { moveToward(e, at.x, at.z, def.speed, dt); pose(e, def.gait); }
       else { e.heading = Math.atan2(at.x - e.x, at.z - e.z); pose(e, 'idle'); if (e.cooldown <= 0) { e.state = 'attack'; e.timer = 0; e.struck = false; } }
@@ -263,6 +329,51 @@ export function createWar(g) {
       pose(e, 'raise', Math.min(1, e.timer / 2.4));
       if (!e.struck && e.timer > 1.4) { e.struck = true; raiseDead(4, 12, 22); }
       if (e.timer > 2.6) { e.state = 'move'; e.brood = 13; }
+    } else if (e.state === 'windup') {
+      // Up goes the trunk, with a roar. Then down.
+      const lift = SLAM.windup - 0.3;
+      e.timer += dt;
+      e.heading = Math.atan2(at.x - e.x, at.z - e.z);
+      if (e.timer < lift) pose(e, 'rage', 0.5 + 0.38 * (e.timer / lift)); else pose(e, 'slam', 0.6 * Math.min(1, (e.timer - lift) / 0.3));
+      if (e.timer >= SLAM.windup) {
+        rings.push({ x: e.x, z: e.z, r: 0, owner: e, model: circle(dustMat, 30, 0.55) });
+        g.audio.crash();
+        g.fx.burst(e.x + Math.sin(e.heading) * 2.5, e.y + 0.3, e.z + Math.cos(e.heading) * 2.5, '#d8c9a0', 22, 9, 0.8);
+        e.state = 'spent'; e.timer = 0; e.restFor = SLAM.spent;
+      }
+    } else if (e.state === 'spent') {
+      // The trunk is buried in the ground, or the wind is knocked out of it. It can do nothing until it has got over it.
+      e.timer += dt;
+      if (def.special === 'slam') pose(e, 'slam', 0.62); else pose(e, 'hurt', 1);
+      if (e.timer > e.restFor) { e.state = 'move'; e.special = rand(8, 12); e.cooldown = 0.6; }
+    } else if (e.state === 'mark') {
+      // The mark follows you for a moment. Then it stops, and the champion jumps.
+      e.timer += dt;
+      e.heading = Math.atan2(at.x - e.x, at.z - e.z);
+      pose(e, 'taunt');
+      if (e.timer < LEAP.follow) { e.mark.x = at.x; e.mark.z = at.z; }
+      else { e.state = 'leap'; e.timer = 0; e.from.x = e.x; e.from.z = e.z; }
+    } else if (e.state === 'leap') {
+      e.timer += dt;
+      const t = Math.min(1, e.timer / LEAP.air), m = e.mark, p = g.player;
+      e.x = e.from.x + (m.x - e.from.x) * t; e.z = e.from.z + (m.z - e.from.z) * t;
+      e.y = height(e.x, e.z) + Math.sin(t * Math.PI) * 9;
+      e.heading = Math.atan2(m.x - e.from.x, m.z - e.from.z);
+      pose(e, 'leap', t);
+      if (t >= 1) {
+        const under = dist(p.x, p.z, m.x, m.z);
+        if (under < LEAP.radius && p.y < height(p.x, p.z) + 3 && !g.scenes.active) {
+          p.damage(LEAP.dmg);
+          e.stall = 0;
+          // You are thrown clear of where it landed.
+          const a = under > 0.2 ? Math.atan2(p.x - m.x, p.z - m.z) : e.heading;
+          if (under < 2.6 && !p.mount) { p.x = m.x + Math.sin(a) * 2.6; p.z = m.z + Math.cos(a) * 2.6; }
+        }
+        g.audio.crash();
+        g.fx.burst(e.x, e.y + 0.4, e.z, '#3f6ad8', 26, 9, 0.8);
+        removeMark(e);
+        e.state = 'spent'; e.timer = 0; e.restFor = LEAP.spent; e.best = Infinity;
+      }
     }
   }
 
@@ -272,6 +383,12 @@ export function createWar(g) {
     if (e.think <= 0 || !valid(e.target)) { e.think = 1; e.target = chooseTarget(e); }
     const at = spot(e.target);
     if (e.state === 'move') {
+      if (def.special === 'dives' && ready(e, dist(e.x, e.z, at.x, at.z), DIVES.within)) {
+        e.state = 'scream'; e.timer = 0; e.dives = 0;
+        g.audio.roar();
+        warn('tellDives', 'It is going to dive three times running. A walk will not get you clear: run, and keep running.');
+        return;
+      }
       const d = moveToward(e, at.x, at.z, def.speed, dt);
       e.y += (ground + def.flies + Math.sin(g.time * 1.3 + e.phase) - e.y) * Math.min(1, dt * 2);
       pose(e, 'fly', g.time + e.phase, 0);
@@ -301,17 +418,56 @@ export function createWar(g) {
       e.timer += dt;
       e.y = ground + def.size * 0.5;
       pose(e, 'stand');
-      if (e.timer > 2.2) { e.state = 'climb'; e.timer = 0; }
+      if (e.timer > (e.restFor || 2.2)) { e.state = 'climb'; e.timer = 0; e.restFor = 0; }
     } else if (e.state === 'climb') {
       e.timer += dt;
       e.x += Math.sin(e.heading) * def.speed * dt; e.z += Math.cos(e.heading) * def.speed * dt;
       e.y += (ground + def.flies - e.y) * Math.min(1, dt * 1.6);
       pose(e, 'fly', g.time + e.phase, 0);
       if (e.timer > 2) e.state = 'move';
+    } else if (e.state === 'scream') {
+      // It hangs in the air and screams at you. Then it comes.
+      e.timer += dt;
+      e.heading = Math.atan2(at.x - e.x, at.z - e.z);
+      e.y += (ground + def.flies - e.y) * Math.min(1, dt * 2);
+      pose(e, 'taunt', g.time);
+      if (e.timer > DIVES.scream) strike(e);
+    } else if (e.state === 'strike') {
+      e.timer += dt / DIVES.seconds;
+      const t = Math.min(1, e.timer);
+      // It follows you for the first half of the way down, and then it is committed.
+      if (t < DIVES.commit) {
+        const gap = def.size + 0.8, dx = at.x - e.from.x, dz = at.z - e.from.z, dd = Math.hypot(dx, dz) || 1;
+        Object.assign(e.aim, { x: at.x - (dx / dd) * gap, y: height(at.x, at.z) + Math.max(1.1, def.size * 0.6), z: at.z - (dz / dd) * gap, spotX: at.x, spotZ: at.z });
+      }
+      e.x = e.from.x + (e.aim.x - e.from.x) * t * t; e.y = e.from.y + (e.aim.y - e.from.y) * t * t; e.z = e.from.z + (e.aim.z - e.from.z) * t * t;
+      e.heading = Math.atan2(e.aim.x - e.from.x, e.aim.z - e.from.z);
+      pose(e, 'dive', t);
+      if (t >= 1) {
+        if (dist(at.x, at.z, e.aim.spotX, e.aim.spotZ) < DIVES.radius) { strikeTarget(e.target, def.dmg); e.stall = 0; }
+        g.fx.burst(e.x, e.y - 0.8, e.z, '#d8c9a0', 10, 6, 0.5);
+        g.audio.crash();
+        e.dives++;
+        e.timer = 0;
+        // After the third it has to come down and get its breath: longer than after an ordinary dive.
+        if (e.dives >= DIVES.count) { e.state = 'rest'; e.restFor = DIVES.rest; e.special = rand(9, 13); }
+        else e.state = 'swoop';
+      }
+    } else if (e.state === 'swoop') {
+      // Up and round, only far enough to come down again.
+      e.timer += dt;
+      e.x += Math.sin(e.heading) * def.speed * dt; e.z += Math.cos(e.heading) * def.speed * dt;
+      e.y += (ground + def.flies * 0.75 - e.y) * Math.min(1, dt * 4);
+      pose(e, 'fly', g.time + e.phase, 0);
+      if (e.timer > DIVES.between) strike(e);
     }
   }
+  function strike(e) {
+    e.state = 'strike'; e.timer = 0;
+    Object.assign(e.from, { x: e.x, y: e.y, z: e.z });
+  }
 
-  function drop(e, i) { scene.remove(e.model); enemies.splice(i, 1); }
+  function drop(e, i) { if (e.mark) removeMark(e); scene.remove(e.model); enemies.splice(i, 1); }
   function updateEnemies(dt) {
     const p = g.player;
     for (let i = enemies.length - 1; i >= 0; i--) {
@@ -354,6 +510,7 @@ export function createWar(g) {
           if (e === war.champion) { war.champion = null; if (war.phase === 'duel') { charge(); g.ui.tip('It has given you up. The rest have not.', 6); } }
           continue;
         }
+        e.special -= dt;
         if (e.def.flies) updateFlyer(e, dt); else updateGround(e, dt);
       }
       // Nothing on the ground may stand inside another: they crowd round you; they do not pile up on one spot.
@@ -580,6 +737,7 @@ export function createWar(g) {
 
   war.update = (dt) => {
     updateEnemies(dt);
+    updateMoves(dt);
     updateShots(dt);
     if (!war.enabled) return;
     war.threat += g.business.smog() * dt * 0.12; // the factory alone is provocation enough

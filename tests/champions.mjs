@@ -10,7 +10,7 @@ const tip = () => page.locator('#tip').innerText();
 await run(`g.story.seen.add('firstTree'); const w = t.field(); window.field = w; t.stand(w.x, w.z, w.x, w.z - 10);
   const p = g.player; p.maxHealth = p.health = 500; window.hits = []; const real = p.damage; p.damage = (n) => { hits.push(n); real(n); };
   window.face = (e) => { p.yaw = Math.atan2(p.x - e.x, p.z - e.z); p.pitch = 0; };
-  window.fresh = (kind, away) => { for (const e of g.war.enemies) e.hp = 0; t.run(3); t.stand(field.x, field.z, field.x, field.z - 10); hits.length = 0;
+  window.fresh = (kind, away) => { for (const e of [...g.war.enemies]) g.war.hurt(e, 1e9, 0, 0); t.run(3); t.stand(field.x, field.z, field.x, field.z - 10); hits.length = 0;
     window.c = g.war.spawn(kind, field.x, field.z - away); c.special = 0; return c; };`);
 
 // ---- The Bar-ba-loot Champion heaves its trunk up over its head and roars. That is the tell.
