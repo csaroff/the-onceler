@@ -65,7 +65,9 @@ assert.equal(s.carryThneeds, 8, 'you can carry eight by hand');
 const sold = s.sold;
 await run('const c = g.business.places.stallCounter, town = g.business.places.townCentre; t.stand(c.x, c.z, town.x, town.z); t.hold("KeyE", 12)');
 s = await read();
-assert.equal(s.sold, sold + 8, 'the town bought the lot');
+assert.equal(s.carryThneeds, 0, 'the town bought the lot');
+// A passer-by may have bought a few more from the counter at home while you were away, so the total is at least yours.
+assert.ok(s.sold >= sold + 8 && s.sold <= sold + 11, `eight of yours sold in town (${s.sold - sold} sold in all)`);
 await shot('05-market');
 
 // ---- The vendors in town sell what cannot be had at home. A keener axe makes every blow count for more.
