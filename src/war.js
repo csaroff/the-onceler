@@ -85,6 +85,8 @@ export function createWar(g) {
   function updateShots(dt) {
     for (let i = shots.length - 1; i >= 0; i--) {
       const s = shots[i];
+      // A shot that lands can end the fight (his death, your knockout), and that clears every shot still in the air.
+      if (!s) continue;
       s.age += dt;
       s.vy -= s.gravity * dt;
       s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
@@ -115,7 +117,7 @@ export function createWar(g) {
         }
       }
       if (!done && s.y < Math.max(height(s.x, s.z), LAKE_Y)) { land(s); done = true; }
-      if (done) { scene.remove(s.model); shots.splice(i, 1); }
+      if (done) { scene.remove(s.model); if (shots[i] === s) shots.splice(i, 1); }
     }
   }
 

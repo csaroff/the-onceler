@@ -379,7 +379,8 @@ if (!testing) {
   renderer.setAnimationLoop(() => {
     const dt = Math.min(0.05, clock.getDelta()), paused = g.paused();
     pauseEl.style.display = paused ? 'flex' : 'none';
-    if (!paused) g.step(dt);
+    // One bad frame must not stop the game for good: say what went wrong, and carry on with the next.
+    try { if (!paused) g.step(dt); } catch (e) { console.error(e); }
     g.render();
     // Save every ten seconds by the wall clock, however fast or slow the game is running.
     if (performance.now() - lastSave > 10000) { lastSave = performance.now(); save(); }
