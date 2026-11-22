@@ -26,13 +26,15 @@ assert.ok(swum > 6 && swum < 20, `four seconds of swimming covers some ground, a
 // would by trying, then swim and walk it.
 const out = await run(`t.stand(${SPOT.x}, ${SPOT.z}, ${SPOT.x}, ${SPOT.z} - 10);
   const p = g.player, STEP = 0.8, FLOAT = land.LAKE_Y - 1.4, level = (x, z) => Math.max(land.height(x, z), FLOAT);
+  // A bank too steep to stand on only slides you back in, so the route keeps off those.
+  const slides = (x, z) => land.height(x, z) > FLOAT + 0.05 && land.steepness(x, z) > land.STEEP;
   const seen = new Map([['0,0', null]]), queue = [[0, 0]]; let goal = null;
   while (queue.length && !goal && seen.size < 200000) {
     const [i, j] = queue.shift(), x = p.x + i * STEP, z = p.z + j * STEP;
     if (land.height(x, z) > land.LAKE_Y + 0.5 && land.steepness(x, z) < 0.5) { goal = [i, j]; break; }
     for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const k = (i + di) + ',' + (j + dj);
-      if (seen.has(k) || level(x + di * STEP, z + dj * STEP) - level(x, z) > land.STEEP * 0.8 - 0.1) continue;
+      if (seen.has(k) || slides(x + di * STEP, z + dj * STEP) || level(x + di * STEP, z + dj * STEP) - level(x, z) > land.STEEP * 0.8 - 0.1) continue;
       seen.set(k, [i, j]); queue.push([i + di, j + dj]);
     }
   }

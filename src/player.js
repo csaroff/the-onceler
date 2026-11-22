@@ -3,6 +3,8 @@ import * as handsArt from './art/hands.js';
 import { roadDistance, height, steepness, STEEP, LAKE_Y } from './terrain.js';
 
 const EYE = 1.7, WALK = 6.5, RUN = 11.5, BACKWARDS = 0.5, REACH = 4.6, SWING_SECONDS = 0.55, SLING_SECONDS = 0.6;
+const DEEP = LAKE_Y - 1.3;   // water deeper than this is over your head
+const FLOAT = LAKE_Y - 1.4;  // where your feet are when you float in it: eyes just above the surface
 const SAFE_FALL = 13; // metres a second you can land at without being hurt: a drop of about three and a half metres
 
 export function createPlayer(g) {
@@ -68,10 +70,14 @@ export function createPlayer(g) {
 
   // Can you take this step? Not up a cliff, and not out into deep water. The ground decides, whether your feet are on
   // it or not: a jump does not carry you up a face you could not walk up.
+  // You cannot walk out of your depth on purpose. But you can slide or fall into deep water, and then you float and
+  // swim: any way you like across the water, and out wherever the bank is low enough to climb.
+  const level = (x, z) => Math.max(height(x, z), FLOAT);
+  const afloat = () => height(p.x, p.z) < DEEP;
   function open(nx, nz) {
-    const here = height(p.x, p.z), dx = nx - p.x, dz = nz - p.z, d = Math.hypot(dx, dz) || 1;
-    const ahead = height(p.x + (dx / d) * 0.8, p.z + (dz / d) * 0.8);
-    return ahead >= LAKE_Y - 1.3 && ahead - here <= STEEP * 0.8;
+    const dx = nx - p.x, dz = nz - p.z, d = Math.hypot(dx, dz) || 1;
+    const ax = p.x + (dx / d) * 0.8, az = p.z + (dz / d) * 0.8;
+    return (height(ax, az) >= DEEP || afloat()) && level(ax, az) - level(p.x, p.z) <= STEEP * 0.8;
   }
 
   p.update = (dt, keys) => {
@@ -99,14 +105,15 @@ export function createPlayer(g) {
       p.moving = speed / RUN;
     }
 
-    const ground = p.mount ? p.y : height(p.x, p.z);
+    const swimming = afloat(), ground = p.mount ? p.y : level(p.x, p.z);
     p.vy = p.mount ? 0 : p.vy - 25 * dt;
     p.y += p.vy * dt;
     if (p.y <= ground) {
       // Coming down hard hurts: walk off a cliff and you may not get up.
-      if (p.vy < -SAFE_FALL && !p.featherFall) p.damage((-p.vy - SAFE_FALL) * 0.6);
+      if (p.vy < -SAFE_FALL && !p.featherFall && !swimming) p.damage( // water breaks a fall
+       (-p.vy - SAFE_FALL) * 0.6);
       p.y = ground;
-      p.vy = keys.Space && !p.knitting && !p.mount && steepness(p.x, p.z) <= STEEP ? 8 : 0;
+      p.vy = keys.Space && !p.knitting && !p.mount && !swimming && steepness(p.x, p.z) <= STEEP ? 8 : 0;
       p.grounded = p.vy === 0;
     } else p.grounded = p.y - ground < 0.25 && p.vy <= 0;
 
