@@ -20,7 +20,8 @@ B for the business menu, V for defences, C to make things, H to drink Moose Juic
    Super-Axe-Hackers that fell four trees at a time.
 
 The land has no edge: forest, mesas, cliffs, gorges and lakes are made as you walk. You cannot climb a cliff, backing
-away is slow, and a long fall hurts. The sky sours where you have felled and clears where you have not.
+away is slow, and a long fall hurts. Fall into a gorge and you can climb out: face the wall and hold E. It is
+slow, and a blow knocks you off. In water over your head you float, and swim. The sky sours where you have felled and clears where you have not.
 
 The Lorax comes out of the first stump, once, up close. After that he is a figure on a spire of ice a long way off.
 

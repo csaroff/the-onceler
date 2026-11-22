@@ -5,6 +5,8 @@ import { roadDistance, height, steepness, STEEP, LAKE_Y } from './terrain.js';
 const EYE = 1.7, WALK = 6.5, RUN = 11.5, BACKWARDS = 0.5, REACH = 4.6, SWING_SECONDS = 0.55, SLING_SECONDS = 0.6;
 const DEEP = LAKE_Y - 1.3;   // water deeper than this is over your head
 const FLOAT = LAKE_Y - 1.4;  // where your feet are when you float in it: eyes just above the surface
+const CLIMB = 1.5;           // metres a second up a cliff face, hand over hand
+const CLIMB_REST = 4;        // seconds after being hit before you can climb: it is no way out of a fight
 const SAFE_FALL = 13; // metres a second you can land at without being hurt: a drop of about three and a half metres
 
 export function createPlayer(g) {
@@ -16,7 +18,8 @@ export function createPlayer(g) {
     x: 5, z: 11, y: 0, vy: 0, yaw: 0.42, pitch: 0, // standing on the road, looking at the shop
     health: 10, maxHealth: 10, lastHurt: -99, hurt: 0,
     armour: 1, pace: 1, mend: 1, ride: 1, featherFall: false,
-    chill: 0, mount: null, // the Thneed Wagon you are riding, if you are // changed by what you make of the animals' spoils
+    chill: 0, mount: null,
+    climb: null, // the way you are going up a cliff face, while you are // the Thneed Wagon you are riding, if you are // changed by what you make of the animals' spoils
     axe: 2, slingDamage: 1, slingRest: 0.85, // what a blow and a slung rock do; better ones are sold in town
     tufts: 0, thneeds: 0, maxTufts: 4, maxThneeds: 8,
     swing: 0, struck: true, sling: 0, shot: true, slingCooldown: 0,
@@ -80,7 +83,28 @@ export function createPlayer(g) {
     return (height(ax, az) >= DEEP || afloat()) && level(ax, az) - level(p.x, p.z) <= STEEP * 0.8;
   }
 
+  // The land has gorges with no way out on foot. Face a cliff and hold [E], and you go up it hand over hand: slowly,
+  // and only while nothing is hitting you. Let go and you slide back down.
+  function wallAhead() {
+    const d = p.facing(), ax = p.x + d.x * 1.2, az = p.z + d.z * 1.2;
+    return height(ax, az) > height(p.x, p.z) + 0.5 && (steepness(ax, az) > STEEP || steepness(p.x, p.z) > STEEP);
+  }
+  p.canClimb = () => !p.mount && !p.knitting && g.time - p.lastHurt > CLIMB_REST && wallAhead();
+  p.climbHint = () => (p.climb ? 'Climbing…' : p.canClimb() ? 'Hold [E] to climb' : '');
+  function climb(dt) {
+    const c = p.climb, rise = (height(p.x + c.x * 0.5, p.z + c.z * 0.5) - height(p.x, p.z)) / 0.5;
+    const step = Math.min(2.2 * dt, (CLIMB * dt) / Math.max(rise, 0.3));
+    p.x += c.x * step; p.z += c.z * step;
+    c.went += step;
+    if (steepness(p.x, p.z) > STEEP) c.onFace = true;
+    // Over the top, or on to a ledge: somewhere you can stand. Or there was nothing there to climb after all.
+    if ((c.onFace && steepness(p.x, p.z) < 0.5) || (!c.onFace && c.went > 3)) p.climb = null;
+    p.moving = 0.3;
+  }
+
   p.update = (dt, keys) => {
+    if (p.climb && (!keys.KeyE || g.time - p.lastHurt < CLIMB_REST)) p.climb = null;
+    if (!p.climb && keys.KeyE && p.canClimb()) { const d = p.facing(); p.climb = { x: d.x, z: d.z, went: 0, onFace: false }; }
     const forward = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), strafe = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     const len = Math.hypot(forward, strafe);
     p.moving = 0;
@@ -88,6 +112,8 @@ export function createPlayer(g) {
     const steep = steepness(p.x, p.z) > STEEP, sliding = steep && p.y <= height(p.x, p.z) + 0.05;
     if (p.mount) {
       p.mount.carry(p); // riding: the wagon does the moving
+    } else if (p.climb) {
+      climb(dt);
     } else if (sliding) {
       const gx = height(p.x + 1, p.z) - height(p.x - 1, p.z), gz = height(p.x, p.z + 1) - height(p.x, p.z - 1), gl = Math.hypot(gx, gz) || 1;
       p.x -= (gx / gl) * 9 * dt; p.z -= (gz / gl) * 9 * dt;
@@ -106,14 +132,15 @@ export function createPlayer(g) {
     }
 
     const swimming = afloat(), ground = p.mount ? p.y : level(p.x, p.z);
-    p.vy = p.mount ? 0 : p.vy - 25 * dt;
+    p.vy = p.mount || p.climb ? 0 : p.vy - 25 * dt;
+    if (p.climb) p.y = ground;
     p.y += p.vy * dt;
     if (p.y <= ground) {
       // Coming down hard hurts: walk off a cliff and you may not get up.
       if (p.vy < -SAFE_FALL && !p.featherFall && !swimming) p.damage( // water breaks a fall
        (-p.vy - SAFE_FALL) * 0.6);
       p.y = ground;
-      p.vy = keys.Space && !p.knitting && !p.mount && !swimming && steepness(p.x, p.z) <= STEEP ? 8 : 0;
+      p.vy = keys.Space && !p.knitting && !p.mount && !p.climb && !swimming && steepness(p.x, p.z) <= STEEP ? 8 : 0;
       p.grounded = p.vy === 0;
     } else p.grounded = p.y - ground < 0.25 && p.vy <= 0;
 

@@ -88,7 +88,7 @@ function comeRound() {
   g.stock.money = Math.round((g.stock.money - lost) * 100) / 100;
   g.ui.fade(true);
   setTimeout(() => g.ui.fade(false), 1500);
-  Object.assign(g.player, { x: SHOP.x + 5, z: SHOP.z + 11, yaw: 0.42, pitch: 0, vy: 0, health: g.player.maxHealth, tufts: 0, thneeds: 0, mount: null });
+  Object.assign(g.player, { x: SHOP.x + 5, z: SHOP.z + 11, yaw: 0.42, pitch: 0, vy: 0, health: g.player.maxHealth, tufts: 0, thneeds: 0, mount: null, climb: null });
   g.war.clear();
   g.ui.tip(lost > 0 ? `You came round at the shop. ${dollars(lost)} was gone.` : 'You came round at the shop.', 8);
 }
@@ -241,7 +241,7 @@ function updateScreen() {
   const juice = g.business.gear.juice ? `Moose Juice: ${g.business.gear.juice} · [H] to drink<br>` : '';
   const spoils = g.crafting.carrying();
   ui.status(`${carrying ? `Carrying ${carrying}<br>` : ''}${juice}${spoils ? `Spoils: ${spoils}<br>` : ''}At the shop: ${stock.tufts} tufts, ${stock.thneeds} Thneeds<br>${g.story.felled.toLocaleString()} trees felled`);
-  ui.hint(g.scenes.active ? '' : g.defences.hint() || g.sites.hint() || g.business.hint());
+  ui.hint(g.scenes.active ? '' : g.defences.hint() || g.sites.hint() || g.business.hint() || g.player.climbHint());
   ui.menu(g.scenes.active ? '' : menuHtml());
   ui.health(player.health / player.maxHealth);
   const boss = war.bossBar();
