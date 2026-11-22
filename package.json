@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build", "test": "node tests/the-onceler.mjs && node tests/wilds.mjs && node tests/cliffs.mjs && node tests/deep-water.mjs && node tests/gorge.mjs && node tests/raid.mjs && node tests/champions.mjs && node tests/throne.mjs && node tests/spoils.mjs && node tests/makings.mjs && node tests/far-afield.mjs && node tests/save-and-pause.mjs && node tests/knocked-out.mjs && node tests/music.mjs && node tests/hackers.mjs && node tests/mending.mjs && node tests/sweeping.mjs && node tests/riding.mjs && node tests/real-input.mjs"
+    "build": "vite build", "test": "node tests/the-onceler.mjs && node tests/wilds.mjs && node tests/cliffs.mjs && node tests/deep-water.mjs && node tests/gorge.mjs && node tests/raid.mjs && node tests/champions.mjs && node tests/throne.mjs && node tests/ending.mjs && node tests/spoils.mjs && node tests/makings.mjs && node tests/far-afield.mjs && node tests/save-and-pause.mjs && node tests/knocked-out.mjs && node tests/music.mjs && node tests/hackers.mjs && node tests/mending.mjs && node tests/sweeping.mjs && node tests/riding.mjs && node tests/real-input.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"
